@@ -28,6 +28,10 @@ AETHER is not a POS. SpotOn Restaurant (RPOS) remains the transactional, kitchen
 
 The complete documentation map is in [docs/README.md](docs/README.md).
 
+Implementation is tracked in the
+[AETHER MVP GitHub Project](https://github.com/users/acaidevops/projects/1)
+and [repository issues](https://github.com/acaidevops/aetherds/issues).
+
 ## Non-negotiable boundaries
 
 - A human server approves every order before it reaches SpotOn.

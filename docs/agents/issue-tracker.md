@@ -1,7 +1,8 @@
 # Issue tracker: GitHub
 
-Issues and PRDs for this repository live as GitHub issues. Use the GitHub app
-or `gh` CLI for issue operations.
+Issues and PRDs live in
+[`acaidevops/aetherds`](https://github.com/acaidevops/aetherds/issues). Use the
+GitHub app or `gh` CLI for issue operations.
 
 ## Conventions
 
@@ -28,7 +29,7 @@ or `gh` CLI for issue operations.
 
 ## GitHub Project
 
-Implementation issues are added to the repository's GitHub Project. The
-project provides portfolio status; GitHub Issues remain the source of truth for
-scope, acceptance criteria, dependencies, and discussion.
-
+Implementation issues are added to the
+[`AETHER MVP` GitHub Project](https://github.com/users/acaidevops/projects/1).
+The project provides portfolio status; GitHub Issues remain the source of truth
+for scope, acceptance criteria, dependencies, and discussion.
