@@ -1,0 +1,1085 @@
+openapi: 3.1.0
+info:
+  title: AETHER Application API
+  version: 0.1.0
+  description: |
+    Executable MVP application-contract baseline. SpotOn provider payloads are
+    intentionally excluded until sandbox verification. Every tenant scope is
+    derived from the authenticated principal, never trusted from request data.
+servers:
+  - url: https://{host}/api/v1
+    variables:
+      host:
+        default: staging.example.invalid
+security:
+  - staffSession: []
+tags:
+  - { name: Device, description: Provisioned guest-device context and controls }
+  - { name: Sessions, description: Dining-session lifecycle and temporary diner context }
+  - { name: Menu, description: Published and staff-scoped menu reads }
+  - { name: Recommendations, description: Deterministic recommendations and bounded explanations }
+  - { name: Cart, description: Mutable pre-submission cart commands }
+  - { name: Orders, description: "Immutable order batches, approval, and reconciliation" }
+  - { name: Service requests, description: Guest hospitality requests and staff transitions }
+  - { name: Staff, description: Live floor and restaurant operations }
+  - { name: Administration, description: Menu enrichment and publication administration }
+  - { name: Webhooks, description: Verified provider event ingestion }
+  - { name: Internal jobs, description: Service-authenticated scheduled and recovery jobs }
+
+paths:
+  /device/context:
+    get:
+      tags: [Device]
+      operationId: getDeviceContext
+      summary: Get provisioned device context
+      security: [{ deviceCredential: [] }]
+      responses:
+        '200': { description: Device and active-session context, content: { application/json: { schema: { $ref: '#/components/schemas/DeviceContext' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '423': { $ref: '#/components/responses/DeviceQuarantined' }
+
+  /public/menu:
+    get:
+      tags: [Menu]
+      operationId: getPublicMenu
+      summary: List the published guest menu
+      security: [{ deviceCredential: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageCursor' }
+        - { $ref: '#/components/parameters/PageLimit' }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Published device-scoped menu, content: { application/json: { schema: { $ref: '#/components/schemas/MenuPage' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /sessions/{sessionId}:
+    parameters: [{ $ref: '#/components/parameters/SessionId' }]
+    get:
+      tags: [Sessions]
+      operationId: getSession
+      summary: Get a dining-session projection
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      responses:
+        '200': { description: Session projection, content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sessions/{sessionId}/privacy-lock:
+    post:
+      tags: [Sessions]
+      operationId: privacyLockSession
+      summary: Privacy-lock an active session
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody: { $ref: '#/components/requestBodies/VersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/resume:
+    post:
+      tags: [Sessions]
+      operationId: resumeSession
+      summary: Resume a privacy-locked session
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody: { $ref: '#/components/requestBodies/VersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/preferences:
+    put:
+      tags: [Sessions]
+      operationId: replaceSessionPreferences
+      summary: Replace session preferences and allergy disclosure
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreferencesRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /sessions/{sessionId}/diners:
+    post:
+      tags: [Sessions]
+      operationId: createDiner
+      summary: Create a temporary diner profile
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DinerCreateRequest' } } }
+      responses:
+        '201': { description: Diner created, content: { application/json: { schema: { $ref: '#/components/schemas/Diner' } } } }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /sessions/{sessionId}/diners/{dinerId}:
+    parameters:
+      - { $ref: '#/components/parameters/SessionId' }
+      - { name: dinerId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Sessions]
+      operationId: updateDiner
+      summary: Update a temporary diner profile
+      security: [{ deviceCredential: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DinerUpdateRequest' } } }
+      responses:
+        '200': { description: Updated diner, content: { application/json: { schema: { $ref: '#/components/schemas/Diner' } } } }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Sessions]
+      operationId: deleteDiner
+      summary: Delete a temporary diner profile
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/ExpectedVersion' }]
+      responses:
+        '204': { description: Diner deleted }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /tables/{tableId}/sessions:
+    post:
+      tags: [Sessions]
+      operationId: startTableSession
+      summary: Start a table-bound dining session
+      x-aether-roles: [server, manager]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: tableId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/StartSessionRequest' } } }
+      responses:
+        '201': { $ref: '#/components/responses/SessionResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+
+  /sessions/{sessionId}/transfer:
+    post:
+      tags: [Sessions]
+      operationId: transferSession
+      summary: Transfer a session to another table and device
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TransferSessionRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/pause-ordering:
+    post:
+      tags: [Sessions]
+      operationId: pauseSessionOrdering
+      summary: Pause ordering for a session
+      x-aether-roles: [server, manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody: { $ref: '#/components/requestBodies/ReasonedVersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/reopen-ordering:
+    post:
+      tags: [Sessions]
+      operationId: reopenSessionOrdering
+      summary: Reopen ordering for a session
+      x-aether-roles: [server, manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody: { $ref: '#/components/requestBodies/ReasonedVersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/close:
+    post:
+      tags: [Sessions]
+      operationId: closeSession
+      summary: Close a dining session
+      x-aether-roles: [server, manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CloseSessionRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/SessionResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+
+  /locations/{locationId}/menu:
+    get:
+      tags: [Menu]
+      operationId: getLocationMenu
+      summary: List a staff-scoped location menu
+      x-aether-roles: [server, manager, food_safety_approver]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/LocationId' }
+        - { $ref: '#/components/parameters/PageCursor' }
+        - { $ref: '#/components/parameters/PageLimit' }
+      responses:
+        '200': { description: Staff-scoped menu page, content: { application/json: { schema: { $ref: '#/components/schemas/MenuPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /menu/items/{itemId}:
+    get:
+      tags: [Menu]
+      operationId: getMenuItem
+      summary: Get a published menu item
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      parameters:
+        - { name: itemId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Published menu item, content: { application/json: { schema: { $ref: '#/components/schemas/MenuItem' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sessions/{sessionId}/recommendations:
+    post:
+      tags: [Recommendations]
+      operationId: createRecommendations
+      summary: Generate validated menu recommendations
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RecommendationRequest' } } }
+      responses:
+        '200': { description: Validated recommendations, content: { application/json: { schema: { $ref: '#/components/schemas/RecommendationResponse' } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /sessions/{sessionId}/recommendation-feedback:
+    post:
+      tags: [Recommendations]
+      operationId: recordRecommendationFeedback
+      summary: Record recommendation feedback
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/RecommendationFeedbackRequest' } } }
+      responses:
+        '204': { description: Feedback recorded }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /sessions/{sessionId}/compare:
+    post:
+      tags: [Recommendations]
+      operationId: compareMenuItems
+      summary: Compare up to three verified menu items
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CompareRequest' } } }
+      responses:
+        '200': { description: Verified comparison, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, maxItems: 3, items: { $ref: '#/components/schemas/MenuItem' } } } } } } }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /sessions/{sessionId}/cart:
+    get:
+      tags: [Cart]
+      operationId: getCart
+      summary: Get the current session cart
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      responses:
+        '200': { $ref: '#/components/responses/CartResult' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /sessions/{sessionId}/cart/items:
+    post:
+      tags: [Cart]
+      operationId: addCartItem
+      summary: Add an item to the cart
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CartItemMutation' } } }
+      responses:
+        '200': { $ref: '#/components/responses/CartResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /sessions/{sessionId}/cart/items/{cartItemId}:
+    parameters:
+      - { $ref: '#/components/parameters/SessionId' }
+      - { name: cartItemId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [Cart]
+      operationId: updateCartItem
+      summary: Update a cart item
+      security: [{ deviceCredential: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CartItemMutation' } } }
+      responses:
+        '200': { $ref: '#/components/responses/CartResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    delete:
+      tags: [Cart]
+      operationId: deleteCartItem
+      summary: Delete a cart item
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/ExpectedVersion' }]
+      responses:
+        '200': { $ref: '#/components/responses/CartResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/cart/validate:
+    post:
+      tags: [Cart]
+      operationId: validateCart
+      summary: Validate the cart against current menu and safety data
+      security: [{ deviceCredential: [] }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
+      requestBody: { $ref: '#/components/requestBodies/VersionCommand' }
+      responses:
+        '200': { description: Validation result, content: { application/json: { schema: { $ref: '#/components/schemas/CartValidation' } } } }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /sessions/{sessionId}/order-batches:
+    post:
+      tags: [Orders]
+      operationId: submitOrderBatch
+      summary: Submit an immutable order batch
+      security: [{ deviceCredential: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/SessionId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SubmitOrderBatchRequest' } } }
+      responses:
+        '201': { $ref: '#/components/responses/OrderBatchResult' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /order-batches/{batchId}/{command}:
+    post:
+      tags: [Orders]
+      operationId: commandOrderBatch
+      summary: Apply an intent-specific order-batch command
+      x-aether-authorization: Role depends on command; withdraw/confirm-revision allow the bound guest session, review commands require the assigned server or manager.
+      description: |
+        Shared contract for withdraw, accept-review, approve, decline,
+        propose-revision, and confirm-revision. Implementations expose the
+        literal command paths documented in api-contracts.md; `command` is
+        restricted to that allowlist.
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/BatchId' }
+        - name: command
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [withdraw, accept-review, approve, decline, propose-revision, confirm-revision]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OrderCommandRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/OrderBatchResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /order-batches/{batchId}/resolve-pos-ambiguity:
+    post:
+      tags: [Orders]
+      operationId: resolvePosAmbiguity
+      summary: Resolve an ambiguous POS submission
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/BatchId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResolveAmbiguityRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/OrderBatchResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+
+  /sessions/{sessionId}/service-requests:
+    post:
+      tags: [Service requests]
+      operationId: createServiceRequest
+      summary: Create or merge a guest service request
+      security: [{ deviceCredential: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/SessionId' }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateServiceRequest' } } }
+      responses:
+        '201': { $ref: '#/components/responses/ServiceRequestResult' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /service-requests/{requestId}/{command}:
+    post:
+      tags: [Service requests]
+      operationId: commandServiceRequest
+      summary: Apply an intent-specific service-request command
+      x-aether-authorization: Guest may cancel/no-longer-needed for its session; staff commands require location scope and ownership or manager authority.
+      security: [{ deviceCredential: [] }, { staffSession: [] }]
+      parameters:
+        - { name: requestId, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: command
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [accept, start, complete, cancel, no-longer-needed]
+      requestBody: { $ref: '#/components/requestBodies/ReasonedVersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/ServiceRequestResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /staff/live-floor:
+    get:
+      tags: [Staff]
+      operationId: getLiveFloor
+      summary: Get the live floor projection
+      x-aether-roles: [server, manager]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: locationId, in: query, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Live floor projection, content: { application/json: { schema: { $ref: '#/components/schemas/LiveFloor' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /locations/{locationId}/sections:
+    post:
+      tags: [Staff]
+      operationId: createSection
+      summary: Create a server section
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/LocationId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateSectionRequest' } } }
+      responses:
+        '201': { description: Section created, content: { application/json: { schema: { $ref: '#/components/schemas/Section' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /tables/{tableId}/assign-server:
+    post:
+      tags: [Staff]
+      operationId: assignServer
+      summary: Assign a server to a table
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ name: tableId, in: path, required: true, schema: { type: string, format: uuid } }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AssignServerRequest' } } }
+      responses:
+        '204': { description: Server assigned }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+
+  /devices/provision:
+    post:
+      tags: [Device]
+      operationId: provisionDevice
+      summary: Provision a managed guest device
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ProvisionDeviceRequest' } } }
+      responses:
+        '201': { description: One-time provisioning credential, content: { application/json: { schema: { $ref: '#/components/schemas/ProvisionedDevice' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /devices/{deviceId}/{command}:
+    post:
+      tags: [Device]
+      operationId: commandDevice
+      summary: Reassign or quarantine a device
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: deviceId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: command, in: path, required: true, schema: { type: string, enum: [reassign, quarantine] } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DeviceCommandRequest' } } }
+      responses:
+        '204': { description: Device command applied }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+
+  /locations/{locationId}/{command}:
+    post:
+      tags: [Staff]
+      operationId: commandLocationAvailability
+      summary: Pause or resume AETHER at a location
+      x-aether-roles: [manager, platform_operator]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/LocationId' }
+        - { name: command, in: path, required: true, schema: { type: string, enum: [pause, resume] } }
+      requestBody: { $ref: '#/components/requestBodies/ReasonedVersionCommand' }
+      responses:
+        '204': { description: Location state changed }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/StateConflict' }
+
+  /admin/menu/staging:
+    get:
+      tags: [Administration]
+      operationId: getMenuStaging
+      summary: List menu-enrichment staging records
+      x-aether-roles: [manager, food_safety_approver]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/PageCursor' }
+        - { $ref: '#/components/parameters/PageLimit' }
+        - { name: status, in: query, schema: { type: string, enum: [unmapped, draft, in_review, approved, published, archived] } }
+      responses:
+        '200': { description: Staging page, content: { application/json: { schema: { $ref: '#/components/schemas/MenuStagingPage' } } } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/menu/items/{mappingId}/enrichment-versions:
+    post:
+      tags: [Administration]
+      operationId: createEnrichmentVersion
+      summary: Create a menu-enrichment version
+      x-aether-roles: [manager]
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: mappingId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/EnrichmentVersionRequest' } } }
+      responses:
+        '201': { $ref: '#/components/responses/EnrichmentResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /admin/menu/enrichment/{versionId}/{command}:
+    post:
+      tags: [Administration]
+      operationId: commandEnrichmentVersion
+      summary: Apply an enrichment review or publication command
+      x-aether-authorization: Manager handles ordinary content; approve-safety requires an independent food-safety approver; author cannot approve own safety change.
+      security: [{ staffSession: [] }]
+      parameters:
+        - { name: versionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - name: command
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [submit-review, approve, approve-safety, publish, archive, restore]
+      requestBody: { $ref: '#/components/requestBodies/ReasonedVersionCommand' }
+      responses:
+        '200': { $ref: '#/components/responses/EnrichmentResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+
+  /webhooks/spoton:
+    post:
+      tags: [Webhooks]
+      operationId: receiveSpotOnWebhook
+      summary: Persist a verified SpotOn webhook
+      security: [{ spotOnSignature: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '202': { description: Persisted for asynchronous processing }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Duplicate event already persisted }
+
+  /internal/jobs/{jobName}:
+    post:
+      tags: [Internal jobs]
+      operationId: runInternalJob
+      summary: Start an internal scheduled or recovery job
+      x-aether-roles: [service_identity]
+      security: [{ serviceCredential: [] }]
+      parameters:
+        - name: jobName
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [spoton-reconcile, menu-reconcile, session-auto-close, request-escalation]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                locationId: { type: string, format: uuid }
+                cursor: { type: string }
+      responses:
+        '202': { description: Job accepted or already active }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { description: Conflicting execution window }
+
+components:
+  securitySchemes:
+    deviceCredential:
+      type: apiKey
+      in: header
+      name: X-Aether-Device-Credential
+    staffSession:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    serviceCredential:
+      type: http
+      scheme: bearer
+      bearerFormat: service JWT
+    spotOnSignature:
+      type: apiKey
+      in: header
+      name: X-SpotOn-Signature
+
+  parameters:
+    SessionId: { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+    BatchId: { name: batchId, in: path, required: true, schema: { type: string, format: uuid } }
+    LocationId: { name: locationId, in: path, required: true, schema: { type: string, format: uuid } }
+    ExpectedVersion: { name: expectedVersion, in: query, required: true, schema: { type: integer, minimum: 0 } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID retained for 24 hours; same key and same body return the original result.
+      schema: { type: string, format: uuid }
+    PageCursor: { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+    PageLimit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+
+  requestBodies:
+    VersionCommand:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/VersionCommand' }
+    ReasonedVersionCommand:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ReasonedVersionCommand' }
+
+  responses:
+    Unauthorized:
+      description: Missing, invalid, or expired credential
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    Forbidden:
+      description: Authenticated principal lacks required scope or role
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    NotFound:
+      description: Resource is absent or not visible in the authenticated scope
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    VersionConflict:
+      description: "expectedVersion does not match the current resource version"
+      content: { application/json: { schema: { $ref: '#/components/schemas/ConflictEnvelope' } } }
+    StateConflict:
+      description: Command is invalid for the current state
+      content: { application/json: { schema: { $ref: '#/components/schemas/ConflictEnvelope' } } }
+    ValidationFailed:
+      description: Request is structurally valid but violates domain validation
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    RateLimited:
+      description: Operation rate limit exceeded
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    DeviceQuarantined:
+      description: Device has been quarantined
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    SessionResult:
+      description: Current session projection
+      content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } }
+    CartResult:
+      description: Current cart projection
+      content: { application/json: { schema: { $ref: '#/components/schemas/Cart' } } }
+    OrderBatchResult:
+      description: Current immutable order-batch projection
+      content: { application/json: { schema: { $ref: '#/components/schemas/OrderBatch' } } }
+    ServiceRequestResult:
+      description: Current service-request projection
+      content: { application/json: { schema: { $ref: '#/components/schemas/ServiceRequest' } } }
+    EnrichmentResult:
+      description: Current enrichment-version projection
+      content: { application/json: { schema: { $ref: '#/components/schemas/EnrichmentVersion' } } }
+
+  schemas:
+    VersionCommand:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+    ReasonedVersionCommand:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    Money:
+      type: object
+      additionalProperties: false
+      required: [amountMinor, currency]
+      properties:
+        amountMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+    Page:
+      type: object
+      required: [nextCursor]
+      properties:
+        nextCursor: { type: [string, 'null'] }
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message, correlationId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            action: { type: [string, 'null'] }
+            correlationId: { type: string }
+            details: { type: array, items: { type: object, additionalProperties: true } }
+    ConflictEnvelope:
+      allOf:
+        - { $ref: '#/components/schemas/ErrorEnvelope' }
+        - type: object
+          properties:
+            currentVersion: { type: integer, minimum: 0 }
+    DeviceContext:
+      type: object
+      required: [deviceId, locationId, tableId, state]
+      properties:
+        deviceId: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        tableId: { type: string, format: uuid }
+        sessionId: { type: [string, 'null'], format: uuid }
+        state: { type: string, enum: [pre_session, active, privacy_locked, cleaning, paused, quarantined] }
+    Session:
+      type: object
+      required: [id, tableId, state, version]
+      properties:
+        id: { type: string, format: uuid }
+        tableId: { type: string, format: uuid }
+        assignedServerId: { type: [string, 'null'], format: uuid }
+        state: { type: string, enum: [pending, active, privacy_locked, ordering_paused, transfer_pending, ready_to_close, closed] }
+        version: { type: integer, minimum: 0 }
+        allergyStatus: { type: string, enum: [none, declared, ask_server, not_provided] }
+    PreferencesRequest:
+      allOf:
+        - { $ref: '#/components/schemas/VersionCommand' }
+        - type: object
+          required: [allergyStatus]
+          properties:
+            allergyStatus: { type: string, enum: [none, declared, ask_server, not_provided] }
+            diningIntent: { type: [string, 'null'], maxLength: 100 }
+            budget: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+            preferences: { type: array, maxItems: 30, items: { type: string, maxLength: 80 } }
+            allergens: { type: array, maxItems: 30, items: { type: string, maxLength: 80 } }
+    Diner:
+      type: object
+      required: [id, label, version]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        version: { type: integer }
+        allergyStatus: { type: string, enum: [none, declared, ask_server, not_provided] }
+    DinerCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, label, allergyStatus]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        label: { type: string, minLength: 1, maxLength: 40 }
+        allergyStatus: { type: string, enum: [none, declared, ask_server, not_provided] }
+    DinerUpdateRequest:
+      allOf:
+        - { $ref: '#/components/schemas/DinerCreateRequest' }
+    StartSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [deviceId]
+      properties:
+        deviceId: { type: string, format: uuid }
+        assignedServerId: { type: [string, 'null'], format: uuid }
+    TransferSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, destinationTableId, destinationDeviceId, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        destinationTableId: { type: string, format: uuid }
+        destinationDeviceId: { type: string, format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CloseSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        managerOverride: { type: boolean, default: false }
+        reason: { type: [string, 'null'], maxLength: 500 }
+    MenuItem:
+      type: object
+      required: [id, name, price, available, menuVersion]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        price: { $ref: '#/components/schemas/Money' }
+        available: { type: boolean }
+        menuVersion: { type: string }
+        dietaryTags: { type: array, items: { type: string } }
+        allergenClassifications:
+          type: array
+          items: { type: string, enum: [contains, may_contain, cross_contact_possible, unknown] }
+    MenuPage:
+      allOf:
+        - { $ref: '#/components/schemas/Page' }
+        - type: object
+          required: [items, menuVersion]
+          properties:
+            menuVersion: { type: string }
+            items: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+    RecommendationRequest:
+      type: object
+      additionalProperties: false
+      required: [menuVersion]
+      properties:
+        menuVersion: { type: string }
+        dinerIds: { type: array, maxItems: 12, items: { type: string, format: uuid } }
+        intent: { type: [string, 'null'] }
+        rejectedItemIds: { type: array, maxItems: 50, items: { type: string, format: uuid } }
+    RecommendationResponse:
+      type: object
+      required: [recommendationId, items, source]
+      properties:
+        recommendationId: { type: string, format: uuid }
+        source: { type: string, enum: [deterministic, ai_explained] }
+        items:
+          type: array
+          items:
+            type: object
+            required: [itemId, reasons]
+            properties:
+              itemId: { type: string, format: uuid }
+              reasons: { type: array, items: { type: string } }
+    RecommendationFeedbackRequest:
+      type: object
+      required: [recommendationId, itemId, outcome]
+      properties:
+        recommendationId: { type: string, format: uuid }
+        itemId: { type: string, format: uuid }
+        outcome: { type: string, enum: [accepted, rejected, ignored] }
+        reasonCode: { type: [string, 'null'] }
+    CompareRequest:
+      type: object
+      required: [itemIds]
+      properties:
+        itemIds: { type: array, minItems: 2, maxItems: 3, uniqueItems: true, items: { type: string, format: uuid } }
+    Cart:
+      type: object
+      required: [id, sessionId, version, items, estimatedSubtotal]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        version: { type: integer, minimum: 0 }
+        menuVersion: { type: string }
+        items: { type: array, items: { $ref: '#/components/schemas/CartItem' } }
+        estimatedSubtotal: { $ref: '#/components/schemas/Money' }
+    CartItem:
+      type: object
+      required: [id, menuItemId, quantity, modifierIds]
+      properties:
+        id: { type: string, format: uuid }
+        menuItemId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+        modifierIds: { type: array, items: { type: string } }
+        dinerIds: { type: array, items: { type: string, format: uuid } }
+        note: { type: [string, 'null'], maxLength: 500 }
+    CartItemMutation:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, menuItemId, quantity, modifierIds]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        menuItemId: { type: string, format: uuid }
+        quantity: { type: integer, minimum: 1, maximum: 99 }
+        modifierIds: { type: array, maxItems: 30, items: { type: string } }
+        dinerIds: { type: array, maxItems: 12, items: { type: string, format: uuid } }
+        note: { type: [string, 'null'], maxLength: 500 }
+    CartValidation:
+      type: object
+      required: [valid, cartVersion, issues]
+      properties:
+        valid: { type: boolean }
+        cartVersion: { type: integer }
+        issues:
+          type: array
+          items:
+            type: object
+            required: [code, itemId]
+            properties:
+              code: { type: string, enum: [ITEM_UNAVAILABLE, PRICE_CHANGED, MODIFIER_INVALID, ALLERGEN_DATA_UNKNOWN, ALLERGY_CONFLICT] }
+              itemId: { type: string, format: uuid }
+              message: { type: string }
+    SubmitOrderBatchRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedCartVersion, menuVersion, guestConfirmed]
+      properties:
+        expectedCartVersion: { type: integer, minimum: 0 }
+        menuVersion: { type: string }
+        guestConfirmed: { const: true }
+    OrderBatch:
+      type: object
+      required: [id, sessionId, version, state, items]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        state: { type: string, enum: [submitted, withdrawn, under_review, revision_required, superseded, approved, pos_pending, pos_confirmed, pos_failed, confirmation_unknown] }
+        items: { type: array, items: { $ref: '#/components/schemas/CartItem' } }
+    OrderCommandRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        reasonCode: { type: [string, 'null'] }
+        reason: { type: [string, 'null'], maxLength: 500 }
+        revision: { type: [object, 'null'], additionalProperties: true }
+        guestConfirmed: { type: [boolean, 'null'] }
+    ResolveAmbiguityRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, resolution, evidence, reason]
+      properties:
+        expectedVersion: { type: integer, minimum: 0 }
+        resolution: { type: string, enum: [confirmed_in_spoton, definitively_absent, rejected] }
+        evidence: { type: string, minLength: 1, maxLength: 2000 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    CreateServiceRequest:
+      type: object
+      additionalProperties: false
+      required: [typeId]
+      properties:
+        typeId: { type: string, format: uuid }
+        note: { type: [string, 'null'], maxLength: 500 }
+    ServiceRequest:
+      type: object
+      required: [id, sessionId, state, version, urgency]
+      properties:
+        id: { type: string, format: uuid }
+        sessionId: { type: string, format: uuid }
+        state: { type: string, enum: [submitted, escalated, accepted, in_progress, completed, cancelled, expired] }
+        urgency: { type: string, enum: [normal, high, urgent] }
+        version: { type: integer, minimum: 0 }
+    LiveFloor:
+      type: object
+      required: [locationId, generatedAt, tables, alerts]
+      properties:
+        locationId: { type: string, format: uuid }
+        generatedAt: { type: string, format: date-time }
+        tables: { type: array, items: { type: object, additionalProperties: true } }
+        alerts: { type: array, items: { type: object, additionalProperties: true } }
+    CreateSectionRequest:
+      type: object
+      required: [name, tableIds]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        tableIds: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
+    Section:
+      type: object
+      required: [id, name, tableIds]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        tableIds: { type: array, items: { type: string, format: uuid } }
+    AssignServerRequest:
+      type: object
+      required: [serverId, expectedVersion]
+      properties:
+        serverId: { type: string, format: uuid }
+        expectedVersion: { type: integer, minimum: 0 }
+    ProvisionDeviceRequest:
+      type: object
+      required: [locationId, defaultTableId]
+      properties:
+        locationId: { type: string, format: uuid }
+        defaultTableId: { type: string, format: uuid }
+        label: { type: string, maxLength: 100 }
+    ProvisionedDevice:
+      type: object
+      required: [deviceId, oneTimeCredential, expiresAt]
+      properties:
+        deviceId: { type: string, format: uuid }
+        oneTimeCredential: { type: string }
+        expiresAt: { type: string, format: date-time }
+    DeviceCommandRequest:
+      type: object
+      required: [reason]
+      properties:
+        tableId: { type: [string, 'null'], format: uuid }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+    MenuStagingPage:
+      allOf:
+        - { $ref: '#/components/schemas/Page' }
+        - type: object
+          required: [items]
+          properties:
+            items: { type: array, items: { $ref: '#/components/schemas/EnrichmentVersion' } }
+    EnrichmentVersionRequest:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        ingredientIds: { type: array, items: { type: string, format: uuid } }
+        dietaryClaims: { type: array, items: { type: string } }
+        imageAssetIds: { type: array, items: { type: string, format: uuid } }
+    EnrichmentVersion:
+      type: object
+      required: [id, mappingId, state, version]
+      properties:
+        id: { type: string, format: uuid }
+        mappingId: { type: string, format: uuid }
+        state: { type: string, enum: [draft, in_review, changes_requested, approved, published, review_required, archived] }
+        version: { type: integer, minimum: 1 }
