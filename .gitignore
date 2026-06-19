@@ -8,4 +8,8 @@ node_modules/
 coverage/
 playwright-report/
 test-results/
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json
 
