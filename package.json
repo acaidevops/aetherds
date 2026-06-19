@@ -1,0 +1,53 @@
+{
+  "name": "aetherds",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AETHER Digital Server — AI-assisted hospitality table experience.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "check:architecture": "depcruise --config .dependency-cruiser.mjs src app",
+    "check:env": "tsx scripts/check-env.example.ts",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run check:architecture && npm run test"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.108.2",
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@tailwindcss/postcss": "4.3.1",
+    "@types/node": "25.9.3",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "dependency-cruiser": "17.4.3",
+    "eslint": "10.5.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-prettier": "5.5.6",
+    "globals": "17.6.0",
+    "jsdom": "29.1.1",
+    "prettier": "3.8.4",
+    "prettier-plugin-tailwindcss": "0.8.0",
+    "tailwindcss": "4.3.1",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.61.1",
+    "vitest": "4.1.9"
+  },
+  "engines": {
+    "node": ">=20.18.0"
+  }
+}

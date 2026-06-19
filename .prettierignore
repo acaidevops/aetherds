@@ -1,0 +1,9 @@
+# Keep the formatting gate focused on code. Prose and the machine-readable
+# OpenAPI contract are hand-authored; reformatting them churns the committed
+# baseline without value. Remove this file if you want prettier to own docs too.
+docs/
+*.md
+# Next.js owns this generated file; see eslint.config.mjs ignores too.
+next-env.d.ts
+# Local tooling state
+.claude/
