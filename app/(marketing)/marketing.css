@@ -114,18 +114,22 @@
 .mkt-btn:hover {
   transform: translateY(-1px);
 }
-.mkt-btn--primary {
+/* Specificity note: `.mkt a { color: inherit }` (0,1,1) would otherwise beat a
+ * single-class button rule, so button colors are scoped with `.mkt` prefixes to
+ * win the cascade and keep labels visible on dark fills. */
+.mkt .mkt-btn--primary {
   background: var(--ink);
   color: var(--paper-2);
 }
-.mkt-btn--primary:hover {
+.mkt .mkt-btn--primary:hover {
   background: var(--accent-deep);
+  color: var(--paper-2);
 }
-.mkt-btn--ghost {
+.mkt .mkt-btn--ghost {
   border-color: var(--line);
   color: var(--ink);
 }
-.mkt-btn--ghost:hover {
+.mkt .mkt-btn--ghost:hover {
   border-color: var(--ink);
 }
 
@@ -494,10 +498,12 @@
     grid-template-columns: 1fr;
   }
 }
-@media (max-width: 560px) {
+@media (max-width: 860px) {
   .mkt-nav__links {
     display: none;
   }
+}
+@media (max-width: 560px) {
   .mkt-bounds,
   .mkt-steps {
     grid-template-columns: 1fr;
