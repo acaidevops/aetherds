@@ -29,15 +29,42 @@ const body = Inter({
   display: 'swap',
 });
 
+const TITLE = 'AETHER — AI-assisted digital hospitality server';
+const DESCRIPTION =
+  'AETHER is an optional digital hospitality layer for seated dining. It guides guests and speeds service while a human server approves every order and SpotOn stays the system of record.';
+
+// Drives canonical/OG absolute URLs. Override per environment via
+// NEXT_PUBLIC_SITE_URL (set in Vercel) so previews and production resolve
+// correctly; falls back to the production domain.
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://aetherds.com';
+
 export const metadata: Metadata = {
-  title: 'AETHER — AI-assisted digital hospitality server',
-  description:
-    'AETHER is an optional digital hospitality layer for seated dining. It guides guests and speeds service while a human server approves every order and SpotOn stays the system of record.',
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  keywords: [
+    'AETHER',
+    'digital hospitality',
+    'restaurant technology',
+    'SpotOn integration',
+    'AI menu guidance',
+    'seated dining',
+  ],
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
   openGraph: {
-    title: 'AETHER — AI-assisted digital hospitality server',
+    title: TITLE,
     description:
       'An optional digital hospitality layer for seated dining. Human servers stay in control; SpotOn stays authoritative.',
     type: 'website',
+    url: '/',
+    siteName: 'AETHER',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description:
+      'An optional digital hospitality layer for seated dining. Human servers stay in control; SpotOn stays authoritative.',
   },
 };
 

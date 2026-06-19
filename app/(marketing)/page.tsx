@@ -10,6 +10,10 @@ import type { ReactNode } from 'react';
  * conditional on SpotOn approval.
  */
 
+/** Single source of truth for outbound contact targets used across the page. */
+const CONTACT_EMAIL = 'auraconnectai@gmail.com';
+const REPO_URL = 'https://github.com/acaidevops/aetherds';
+
 const STEPS = [
   {
     n: '01',
@@ -187,12 +191,10 @@ export default function LandingPage(): ReactNode {
         {/* SpotOn */}
         <section className="mkt-section" id="spoton">
           <div className="mkt-shell mkt-spoton">
-            <div>
+            <div className="mkt-spoton__intro">
               <span className="mkt-eyebrow">SpotOn integration</span>
-              <h2 className="mkt-section__head" style={{ fontSize: '2.3rem', marginBottom: 18 }}>
-                Built to respect the system of record.
-              </h2>
-              <p style={{ color: 'var(--ink-soft)', maxWidth: '46ch' }}>
+              <h2 className="mkt-spoton__title">Built to respect the system of record.</h2>
+              <p className="mkt-spoton__lede">
                 AETHER integrates with SpotOn through its Centralized API. An order only moves
                 forward after SpotOn acknowledges it, and SpotOn stays authoritative from that point
                 on. If AETHER is down, the restaurant operates normally through SpotOn.
@@ -285,23 +287,17 @@ export default function LandingPage(): ReactNode {
         {/* CTA */}
         <section className="mkt-cta" id="contact">
           <div className="mkt-shell">
-            <span className="mkt-eyebrow" style={{ justifyContent: 'center' }}>
-              Let’s talk
-            </span>
+            <span className="mkt-eyebrow mkt-eyebrow--center">Let’s talk</span>
             <h2>Investing, partnering, or integrating? We’d like to hear from you.</h2>
             <p>
               We’re raising to bring AETHER to its first pilot and working toward SpotOn integration
               approval. Reach out for the deck, a product walkthrough, or partnership details.
             </p>
             <div className="mkt-cta__actions">
-              <a className="mkt-btn mkt-btn--primary" href="mailto:auraconnectai@gmail.com">
+              <a className="mkt-btn mkt-btn--primary" href={`mailto:${CONTACT_EMAIL}`}>
                 Email the team
               </a>
-              <a
-                className="mkt-btn mkt-btn--ghost"
-                href="https://github.com/acaidevops/aetherds"
-                rel="noreferrer"
-              >
+              <a className="mkt-btn mkt-btn--ghost" href={REPO_URL} rel="noreferrer">
                 View the engineering baseline
               </a>
             </div>
@@ -314,7 +310,7 @@ export default function LandingPage(): ReactNode {
           <span>
             © {new Date().getFullYear()} AETHER. An optional layer for human-led hospitality.
           </span>
-          <a href="mailto:auraconnectai@gmail.com">auraconnectai@gmail.com</a>
+          <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
         </div>
       </footer>
     </>

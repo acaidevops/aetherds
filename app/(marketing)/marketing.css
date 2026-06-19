@@ -48,8 +48,13 @@
   margin: 0;
 }
 
-.mkt a {
+/* Content links inherit the surrounding text color. Buttons are excluded so
+ * their own fill/label colors win the cascade (they set color explicitly). */
+.mkt a:not(.mkt-btn) {
   color: inherit;
+  text-decoration: none;
+}
+.mkt a.mkt-btn {
   text-decoration: none;
 }
 
@@ -149,6 +154,9 @@
   width: 22px;
   height: 1px;
   background: var(--accent);
+}
+.mkt-eyebrow--center {
+  justify-content: center;
 }
 
 /* ---- Hero ---- */
@@ -330,6 +338,14 @@
   grid-template-columns: 0.9fr 1.1fr;
   gap: 64px;
   align-items: center;
+}
+.mkt-spoton__title {
+  font-size: 2.3rem;
+  margin: 18px 0;
+}
+.mkt-spoton__lede {
+  color: var(--ink-soft);
+  max-width: 46ch;
 }
 .mkt-flow {
   display: flex;
@@ -514,10 +530,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mkt-btn:hover {
+  .mkt .mkt-btn,
+  .mkt .mkt-btn:hover {
     transform: none;
   }
-  .mkt * {
-    transition: none !important;
+  /* This rule follows the transition declarations in source order and matches
+   * their specificity, so it overrides them without needing !important. */
+  .mkt *,
+  .mkt *::before,
+  .mkt *::after {
+    transition-duration: 0.001ms;
+    animation-duration: 0.001ms;
   }
 }
