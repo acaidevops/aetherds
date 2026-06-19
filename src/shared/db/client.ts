@@ -21,9 +21,15 @@ let cached: ServerSupabaseClient | null = null;
 
 export function getServerSupabaseClient(): ServerSupabaseClient {
   if (cached) return cached;
-  cached = createClient(serverEnv.supabaseUrl, serverEnv.supabaseServiceRoleKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  try {
+    cached = createClient(serverEnv.supabaseUrl, serverEnv.supabaseServiceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  } catch (cause) {
+    // Never surface the service-role key or connection string in the error.
+    // Wrap with a stable, scrubbed message and preserve the cause for logs.
+    throw new Error('Failed to initialize Supabase server client.', { cause });
+  }
   return cached;
 }
 

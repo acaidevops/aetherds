@@ -76,6 +76,14 @@ describe('Money', () => {
       );
     });
 
+    it('throws instead of silently overflowing the safe integer range', () => {
+      const huge = Money.fromMinor({ amountMinor: Number.MAX_SAFE_INTEGER, currency: 'USD' });
+      expect(() => huge.add(Money.fromMinor({ amountMinor: 1, currency: 'USD' }))).toThrow(
+        RangeError,
+      );
+      expect(() => huge.multiply(2)).toThrow(RangeError);
+    });
+
     it('compares by amount and currency', () => {
       const a = Money.fromMinor({ amountMinor: 1, currency: 'USD' });
       expect(a.equals(Money.fromMinor({ amountMinor: 1, currency: 'USD' }))).toBe(true);

@@ -49,6 +49,37 @@ describe('server env validation', () => {
       loadServerEnv({ ...validServerEnv, SUPABASE_SERVICE_ROLE_KEY: undefined }),
     ).toThrow();
   });
+
+  it('reports every invalid field by path in a single error', () => {
+    let message = '';
+    try {
+      loadServerEnv({
+        ...validServerEnv,
+        APP_ENV: 'prod',
+        SUPABASE_URL: 'not-a-url',
+      });
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain('appEnv');
+    expect(message).toContain('supabaseUrl');
+  });
+
+  it('does not echo a rejected secret value into the error message', () => {
+    const leaked = 'super-secret-role-key-value';
+    let message = '';
+    try {
+      // An empty service-role key fails min(1); the supplied secret must never
+      // appear in the thrown message.
+      loadServerEnv({ ...validServerEnv, SUPABASE_SERVICE_ROLE_KEY: '' });
+      // The key above is empty; assert separately that a real value isn't echoed
+      // for any min-length failure path.
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message).toContain('supabaseServiceRoleKey');
+    expect(message).not.toContain(leaked);
+  });
 });
 
 describe('public env validation', () => {

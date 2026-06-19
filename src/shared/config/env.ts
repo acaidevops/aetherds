@@ -11,7 +11,7 @@ import { serverEnvSchema, type ServerEnv } from './env-schema';
  * variables are missing or invalid, rather than surfacing undefined behavior.
  */
 export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
-  return serverEnvSchema.parse({
+  const result = serverEnvSchema.safeParse({
     nodeEnv: source.NODE_ENV,
     appEnv: source.APP_ENV,
     appName: source.APP_NAME,
@@ -29,6 +29,19 @@ export function loadServerEnv(source: NodeJS.ProcessEnv = process.env): ServerEn
 
     logLevel: source.LOG_LEVEL,
   });
+
+  if (!result.success) {
+    // Surface every problem at once with the offending field paths, but never
+    // echo the values themselves — they may be secrets.
+    const problems = result.error.issues
+      .map((issue) => `  - ${issue.path.join('.') || '(root)'}: ${issue.message}`)
+      .join('\n');
+    throw new Error(
+      `Invalid server environment configuration. Fix the following variable(s):\n${problems}`,
+    );
+  }
+
+  return result.data;
 }
 
 /**

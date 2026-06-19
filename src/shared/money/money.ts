@@ -24,6 +24,18 @@ const CURRENCY_DECIMALS: Readonly<Record<CurrencyCode, number>> = {
 };
 
 /**
+ * Guard arithmetic results against silent loss of precision. Once a minor-unit
+ * total exceeds Number.MAX_SAFE_INTEGER, integer math stops being exact and
+ * money would corrupt without throwing. Fail loudly instead.
+ */
+function assertSafeMinor(amountMinor: number, op: string): number {
+  if (!Number.isSafeInteger(amountMinor)) {
+    throw new RangeError(`Money ${op} overflowed the safe integer range (got ${amountMinor}).`);
+  }
+  return amountMinor;
+}
+
+/**
  * Convert a decimal value to integer minor units WITHOUT binary floating-point
  * rounding error. Strings are parsed digit-by-digit; numbers are routed through
  * their string form first. Rounds half-up on the first digit beyond the
@@ -106,7 +118,7 @@ export class Money implements MoneyShape {
 
   add(other: Money): Money {
     this.assertSameCurrency(other);
-    return new Money(this.amountMinor + other.amountMinor, this.currency);
+    return new Money(assertSafeMinor(this.amountMinor + other.amountMinor, 'add'), this.currency);
   }
 
   subtract(other: Money): Money {
@@ -121,7 +133,7 @@ export class Money implements MoneyShape {
     if (!Number.isInteger(quantity) || quantity < 0) {
       throw new RangeError(`multiply expects a non-negative integer quantity (got ${quantity}).`);
     }
-    return new Money(this.amountMinor * quantity, this.currency);
+    return new Money(assertSafeMinor(this.amountMinor * quantity, 'multiply'), this.currency);
   }
 
   equals(other: Money): boolean {
