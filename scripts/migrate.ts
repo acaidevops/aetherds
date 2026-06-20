@@ -7,6 +7,12 @@
  * Docker/PostgREST/Auth dependency.
  *
  * Design notes:
+ * - Idempotent across re-runs: a `public.aether_migrations` history table tracks
+ *   applied filenames, so already-applied files are skipped. (This is the
+ *   runner's own bookkeeping, separate from Supabase's
+ *   `supabase_migrations.schema_migrations`; real environments use
+ *   `supabase db push`.) Expect either a fresh database or one this runner has
+ *   migrated before.
  * - Each migration file runs in its OWN transaction (not one mega-transaction):
  *   this matches Supabase CLI semantics and survives future non-transactional
  *   DDL (e.g. CREATE INDEX CONCURRENTLY).
@@ -23,8 +29,10 @@ import path from 'node:path';
 import { Pool } from 'pg';
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'supabase/migrations');
+const HISTORY_TABLE = 'public.aether_migrations';
 
-async function bootstrapRoles(pool: Pool): Promise<void> {
+/** Roles + the migration-history table. Idempotent; safe on a fresh or reused DB. */
+async function bootstrap(pool: Pool): Promise<void> {
   // authenticated/anon exist in real Supabase; create them idempotently for the
   // plain-Postgres CI path so RLS test connections can SET ROLE to a non-bypass
   // principal.
@@ -40,6 +48,18 @@ async function bootstrapRoles(pool: Pool): Promise<void> {
     end
     $$;
   `);
+
+  await pool.query(`
+    create table if not exists ${HISTORY_TABLE} (
+      filename   text        primary key,
+      applied_at timestamptz not null default now()
+    );
+  `);
+}
+
+async function appliedFiles(pool: Pool): Promise<Set<string>> {
+  const result = await pool.query<{ filename: string }>(`select filename from ${HISTORY_TABLE}`);
+  return new Set(result.rows.map((r) => r.filename));
 }
 
 async function main(): Promise<void> {
@@ -57,20 +77,29 @@ async function main(): Promise<void> {
 
   const pool = new Pool({ connectionString: url });
   try {
-    await bootstrapRoles(pool);
-    console.log(`[migrate] applying ${files.length} migration(s) to ${redactUrl(url)}`);
+    await bootstrap(pool);
+    const applied = await appliedFiles(pool);
+    const pending = files.filter((f) => !applied.has(f));
 
-    for (const file of files) {
+    console.log(
+      `[migrate] ${pending.length} pending / ${applied.size} already applied ` +
+        `(of ${files.length}) -> ${redactUrl(url)}`,
+    );
+
+    for (const file of pending) {
       const sql = readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
       const client = await pool.connect();
       try {
         await client.query('begin');
         await client.query(sql);
+        await client.query(`insert into ${HISTORY_TABLE} (filename) values ($1)`, [file]);
         await client.query('commit');
         console.log(`[migrate]   ✓ ${file}`);
       } catch (cause) {
         await client.query('rollback').catch(() => undefined);
-        throw new Error(`Migration ${file} failed: ${(cause as Error).message}`, { cause });
+        throw new Error(`Migration ${file} failed: ${(cause as Error).message}`, {
+          cause,
+        });
       } finally {
         client.release();
       }

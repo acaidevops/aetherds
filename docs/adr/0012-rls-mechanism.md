@@ -73,10 +73,17 @@ the migration files, so the SQL stays Supabase-pure.
    are therefore rejected with a row-level-security **error**, not silently hidden.
    Module epics call this instead of writing policy SQL.
 
-4. **Tenant root and platform access.** `restaurants` is the tenant root (no
-   `restaurant_id`) and uses an explicit policy: a member sees its own row; a
-   `platform_operator` sees all. `locations` uses the helper plus a permissive
-   `platform_operator` overlay (PostgreSQL ORs permissive policies).
+4. **Tenant root and platform access.** `restaurants` and `locations` are the
+   tenancy *roots*: a restaurant's identity is its own `id`, and a location's
+   identity is its own `id` (there is no `location_id` column on `locations`).
+   They therefore use **explicit, id-based policies** rather than the generic
+   helper: a member sees the restaurant/location its scope resolves to
+   (`restaurant_id = current_restaurant_id()` and, for locations,
+   `id = current_location_id()`), and a `platform_operator` sees all rows
+   (PostgreSQL ORs permissive policies, so the platform clause is layered on).
+   The generic `app.enable_tenant_rls` helper is reserved for *downstream* tables
+   that carry both `restaurant_id` and a `location_id` FK to a parent location
+   (tables, devices, dining_sessions, …).
 
 5. **Service role bypasses RLS** (intended, defense in depth). The application
    server uses the service-role client (`src/shared/db/client.ts`), which bypasses
@@ -98,15 +105,22 @@ the migration files, so the SQL stays Supabase-pure.
 - `pg` is a server/tooling-only dependency (runner + integration tests); ESLint
   forbids importing it from `app/` or `src/`.
 - Platform-wide access is an explicit per-table overlay, never a blanket grant.
+- The DDL helper `app.enable_tenant_rls` is `SECURITY DEFINER`, so its
+  `EXECUTE` privilege is revoked from `PUBLIC`/`authenticated`/`anon` after
+  creation; only the migration owner may run it. The claim-reader helpers stay
+  `PUBLIC`-executable because RLS evaluates them at query time.
 
 ## Verification
 
-- `supabase/migrations/00000000000000_app_schema.sql` defines the `app` helpers
-  and `enable_tenant_rls`; `00000000000001_tenancy_root.sql` defines `restaurants`
-  and `locations` with RLS.
+- `supabase/migrations/00000000000000_app_schema.sql` defines the `app`
+  claim-reader helpers and the reusable `enable_tenant_rls` (with its `EXECUTE`
+  privilege revoked from client roles); `00000000000001_tenancy_root.sql`
+  defines `restaurants` and `locations` with **explicit id-based root policies**
+  plus a `platform_operator` overlay.
 - `tests/integration/db/rls-cross-tenant.test.ts` proves: tenant A cannot read,
   insert, update, or delete tenant B's rows; anonymous sees nothing; cross-tenant
   writes raise a row-level-security error; client-provided tenant IDs do not
-  expand scope; `platform_operator` reads across tenants.
+  expand scope; `platform_operator` reads across tenants; and the reusable
+  `enable_tenant_rls` helper isolates a representative downstream table.
 - CI (`migrations-and-rls` job) applies migrations to a `postgres:16` service and
   runs the integration suite on every PR.

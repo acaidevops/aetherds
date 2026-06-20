@@ -235,4 +235,19 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
       ),
     ).rejects.toThrow(/row-level security/i);
   });
+
+  it('does not expose the privileged DDL helper to client roles', async () => {
+    // app.enable_tenant_rls is SECURITY DEFINER DDL; its EXECUTE privilege is
+    // revoked from PUBLIC/authenticated/anon so only the migration owner may run
+    // it. A client-reachable role must not be able to alter RLS on tables.
+    await expect(
+      asTenant(
+        pool,
+        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+        async (c) => {
+          await c.query("select app.enable_tenant_rls('sample_widgets'::regclass, true)");
+        },
+      ),
+    ).rejects.toThrow(/permission denied for function enable_tenant_rls/i);
+  });
 });

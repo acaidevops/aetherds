@@ -145,3 +145,13 @@ begin
                  v_prefix || '_tenant_delete', p_table, v_predicate);
 end;
 $$;
+
+-- SECURITY: SECURITY DEFINER functions are executable by PUBLIC by default.
+-- authenticated/anon hold USAGE on schema app, so without this revocation a
+-- client-reachable role could invoke this privileged DDL helper directly
+-- (ALTER TABLE / CREATE POLICY). Restrict execution to the migration owner
+-- only. The claim-reader helpers above stay PUBLIC-executable because RLS
+-- policy evaluation calls them at query time.
+revoke all on function app.enable_tenant_rls(regclass, boolean, text) from public;
+revoke all on function app.enable_tenant_rls(regclass, boolean, text) from authenticated, anon;
+
