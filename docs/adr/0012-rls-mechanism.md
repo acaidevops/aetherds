@@ -62,6 +62,11 @@ the migration files, so the SQL stays Supabase-pure.
    `app.current_location_id()`, `app.current_role()`, `app.current_device_id()`.
    Each is `language sql stable`, `security invoker`, with `set search_path`
    hardening and an empty-string-safe cast (`nullif(..., '')` before `::jsonb`).
+   The AETHER application role is read from the `app_role` claim, **not** the
+   bare `role` claim: `role` is reserved by Supabase/PostgREST (it carries the
+   *database* role used for `SET ROLE`, e.g. `authenticated`), so every real
+   user has `role: 'authenticated'`. `app.current_role()` therefore reads
+   `app_role`, and `tenantClaimsFor` emits `app_role` (never `role`).
 
 2. **Deny-by-default.** Every tenant table enables RLS. With no matching policy a
    role sees nothing; anonymous (no claims) resolves to NULL scope and is denied.

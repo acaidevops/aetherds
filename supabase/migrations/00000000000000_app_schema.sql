@@ -30,6 +30,15 @@ create schema if not exists app;
 --
 -- These functions only read a GUC, so they are SECURITY INVOKER (the default).
 -- `set search_path` hardens resolution of the jsonb operators.
+--
+-- IMPORTANT — claim names: the JWT `role` claim is RESERVED by Supabase/
+-- PostgREST: PostgREST reads it to SET ROLE to a database role, so every real
+-- user carries `role: 'authenticated'` (anon key: `role: 'anon'`). The AETHER
+-- application role (manager/server/platform_operator/...) MUST live in a
+-- separate `app_role` claim. app.current_role() therefore reads `app_role`;
+-- reading `role` would return 'authenticated' for everyone in production and
+-- break the platform_operator policies (and a token minted with
+-- `role: 'manager'` would make PostgREST try SET ROLE to a nonexistent DB role).
 -- ---------------------------------------------------------------------------
 
 create or replace function app.current_restaurant_id()
@@ -56,7 +65,7 @@ language sql
 stable
 set search_path = app, public
 as $$
-  select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role'
+  select nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'app_role'
 $$;
 
 create or replace function app.current_device_id()

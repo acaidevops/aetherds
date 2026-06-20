@@ -12,7 +12,10 @@
  *   runner's own bookkeeping, separate from Supabase's
  *   `supabase_migrations.schema_migrations`; real environments use
  *   `supabase db push`.) Expect either a fresh database or one this runner has
- *   migrated before.
+ *   migrated before. The history table also stores a SHA-256 checksum of each
+ *   applied file's contents, so editing an already-applied migration is
+ *   detected and fails loudly rather than silently skipping the new SQL (which
+ *   would leave a reused local/staging DB on a schema different from the repo).
  * - Each migration file runs in its OWN transaction (not one mega-transaction):
  *   this matches Supabase CLI semantics and survives future non-transactional
  *   DDL (e.g. CREATE INDEX CONCURRENTLY).
@@ -23,6 +26,7 @@
  * Run via `npm run db:migrate`. Never imported by application code under `src/`
  * (the `pg` dependency is server/tooling-only; eslint enforces the boundary).
  */
+import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -52,14 +56,24 @@ async function bootstrap(pool: Pool): Promise<void> {
   await pool.query(`
     create table if not exists ${HISTORY_TABLE} (
       filename   text        primary key,
+      checksum   text,
       applied_at timestamptz not null default now()
     );
   `);
+  // Backfill the checksum column for history tables created before it existed.
+  await pool.query(`alter table ${HISTORY_TABLE} add column if not exists checksum text`);
 }
 
-async function appliedFiles(pool: Pool): Promise<Set<string>> {
-  const result = await pool.query<{ filename: string }>(`select filename from ${HISTORY_TABLE}`);
-  return new Set(result.rows.map((r) => r.filename));
+/** SHA-256 of a migration file's contents, used to detect post-apply edits. */
+function checksumOf(sql: string): string {
+  return createHash('sha256').update(sql, 'utf8').digest('hex');
+}
+
+async function appliedFiles(pool: Pool): Promise<Map<string, string | null>> {
+  const result = await pool.query<{ filename: string; checksum: string | null }>(
+    `select filename, checksum from ${HISTORY_TABLE}`,
+  );
+  return new Map(result.rows.map((r) => [r.filename, r.checksum]));
 }
 
 async function main(): Promise<void> {
@@ -79,6 +93,24 @@ async function main(): Promise<void> {
   try {
     await bootstrap(pool);
     const applied = await appliedFiles(pool);
+
+    // Fail loudly if an already-applied migration's contents changed on disk.
+    // (Legacy rows with a null checksum predate this column and are skipped.)
+    for (const file of files) {
+      if (!applied.has(file)) continue;
+      const recorded = applied.get(file);
+      if (recorded == null) continue;
+      const current = checksumOf(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'));
+      if (current !== recorded) {
+        throw new Error(
+          `Applied migration ${file} has been edited since it was applied ` +
+            `(checksum ${recorded.slice(0, 12)}… -> ${current.slice(0, 12)}…). ` +
+            `Migrations are immutable once applied; add a new migration instead, ` +
+            `or reset the database to re-apply from scratch.`,
+        );
+      }
+    }
+
     const pending = files.filter((f) => !applied.has(f));
 
     console.log(
@@ -92,7 +124,10 @@ async function main(): Promise<void> {
       try {
         await client.query('begin');
         await client.query(sql);
-        await client.query(`insert into ${HISTORY_TABLE} (filename) values ($1)`, [file]);
+        await client.query(`insert into ${HISTORY_TABLE} (filename, checksum) values ($1, $2)`, [
+          file,
+          checksumOf(sql),
+        ]);
         await client.query('commit');
         console.log(`[migrate]   ✓ ${file}`);
       } catch (cause) {

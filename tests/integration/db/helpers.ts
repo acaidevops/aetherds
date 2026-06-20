@@ -31,13 +31,19 @@ export interface TenantClaims {
   restaurantId?: string;
   /** Location scope within the restaurant when applicable. */
   locationId?: string;
-  role: string;
+  /** AETHER application role; carried as the `app_role` claim (NOT `role`). */
+  appRole: string;
   deviceId?: string;
 }
 
 /**
  * Run `body` as a tenant principal (non-bypass role + JWT claims). RLS applies.
  * The transaction is rolled back at the end so nothing persists.
+ *
+ * The JWT carries `role: 'authenticated'` (the Supabase/PostgREST-reserved DB
+ * role) plus the AETHER application role under `app_role` — mirroring a real
+ * production token. The DB role is fixed via `set local role authenticated`
+ * regardless of the claim (PostgREST does that step in production).
  */
 export async function asTenant<T>(
   pool: Pool,
@@ -51,9 +57,12 @@ export async function asTenant<T>(
     // superusers bypass RLS). `set local` scopes it to this transaction.
     await client.query('set local role authenticated');
     const jwt = {
-      restaurant_id: claims.restaurantId,
+      restaurant_id: claims.restaurantId ?? null,
       location_id: claims.locationId ?? null,
-      role: claims.role,
+      // `role` is Supabase-reserved (PostgREST uses it to SET ROLE); the AETHER
+      // app role lives in `app_role`, which app.current_role() reads.
+      role: 'authenticated',
+      app_role: claims.appRole,
       device_id: claims.deviceId ?? null,
     };
     await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(jwt)]);

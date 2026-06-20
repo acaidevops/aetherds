@@ -103,7 +103,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
   it('a tenant reads its own location but not another tenant’s', async () => {
     const visible = await asTenant(
       pool,
-      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
       async (c) => {
         const own = await c.query('select id from locations where id = $1', [LOCATION_A1]);
         expect(own.rows).toHaveLength(1);
@@ -137,7 +137,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
     await expect(
       asTenant(
         pool,
-        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
         async (c) => {
           // Attempt to create a row in tenant B's scope from tenant A.
           await c.query('insert into locations (id, restaurant_id, name) values ($1, $2, $3)', [
@@ -154,7 +154,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
     await expect(
       asTenant(
         pool,
-        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
         async (c) => {
           await c.query('update locations set restaurant_id = $1 where id = $2', [
             RESTAURANT_B,
@@ -168,7 +168,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
   it('cannot DELETE another tenant’s row (invisible and untouched)', async () => {
     const deletedCount = await asTenant(
       pool,
-      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
       async (c) => {
         const res = await c.query('delete from locations where id = $1', [LOCATION_B1]);
         return res.rowCount ?? 0;
@@ -187,7 +187,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
   it('ignores a client-provided tenant ID in the WHERE clause (RLS is independent of predicates)', async () => {
     const sneaky = await asTenant(
       pool,
-      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
       async (c) => {
         // Client asks for tenant B explicitly; RLS must still clamp to A -> none.
         const r = await c.query('select id from locations where restaurant_id = $1', [
@@ -200,7 +200,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
   });
 
   it('platform_operator can read across all tenants', async () => {
-    const seen = await asTenant(pool, { role: 'platform_operator' }, async (c) => {
+    const seen = await asTenant(pool, { appRole: 'platform_operator' }, async (c) => {
       const r = await c.query('select id from restaurants order by id');
       return (r.rows as { id: string }[]).map((row) => row.id);
     });
@@ -211,7 +211,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
     // The reusable helper (not the hand-written root policies) must also isolate.
     const visible = await asTenant(
       pool,
-      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'server' },
+      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'server' },
       async (c) => {
         const r = await c.query('select id from sample_widgets');
         return (r.rows as { id: string }[]).map((row) => row.id);
@@ -225,7 +225,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
     await expect(
       asTenant(
         pool,
-        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'server' },
+        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'server' },
         async (c) => {
           await c.query(
             'insert into sample_widgets (restaurant_id, location_id, name) values ($1, $2, $3)',
@@ -243,7 +243,7 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
     await expect(
       asTenant(
         pool,
-        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, role: 'manager' },
+        { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
         async (c) => {
           await c.query("select app.enable_tenant_rls('sample_widgets'::regclass, true)");
         },
