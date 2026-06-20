@@ -1,0 +1,488 @@
+/*
+ * Guest design system — theme application + components (epic E1).
+ *
+ * Primitive tokens live in app/globals.css (:root). This file applies the dark
+ * guest THEME and defines component styles, all scoped under `.gds` so guest
+ * styling never leaks into marketing or staff/admin surfaces. Every interactive
+ * element meets the WCAG 2.2 AA target floor and has a visible focus ring;
+ * status never relies on color alone (see /DESIGN.md).
+ */
+
+.gds {
+  --gds-font-sans: var(--font-gds-sans), system-ui, -apple-system, sans-serif;
+  --gds-font-display: var(--font-gds-display), Georgia, serif;
+
+  background: var(--gds-bg);
+  color: var(--gds-text);
+  font-family: var(--gds-font-sans);
+  font-size: var(--gds-text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  text-rendering: optimizeLegibility;
+}
+
+.gds *,
+.gds *::before,
+.gds *::after {
+  box-sizing: border-box;
+}
+
+.gds h1,
+.gds h2,
+.gds h3 {
+  font-family: var(--gds-font-display);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+.gds :focus-visible {
+  outline: none;
+  box-shadow: var(--gds-focus-ring);
+  border-radius: var(--gds-radius-sm);
+}
+
+/* ===================== Shell ===================== */
+
+.gds-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100dvh;
+}
+
+.gds-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gds-space-4);
+  padding: var(--gds-space-4) var(--gds-space-5);
+  border-bottom: 1px solid var(--gds-line);
+  background: color-mix(in srgb, var(--gds-bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.gds-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gds-space-3);
+  font-family: var(--gds-font-display);
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  font-size: var(--gds-text-sm);
+  color: var(--gds-text);
+}
+
+.gds-mark__glyph {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+
+.gds-content {
+  padding: var(--gds-space-6) var(--gds-space-5) var(--gds-space-7);
+  max-width: 980px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Persistent bottom navigation (experience-spec.md §3). */
+.gds-nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: var(--gds-space-2);
+  padding: var(--gds-space-2) var(--gds-space-3)
+    calc(var(--gds-space-2) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--gds-line);
+  background: color-mix(in srgb, var(--gds-bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.gds-nav__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--gds-touch-comfort);
+  padding: var(--gds-space-2);
+  border: none;
+  background: transparent;
+  color: var(--gds-text-muted);
+  font: inherit;
+  font-size: var(--gds-text-xs);
+  border-radius: var(--gds-radius-md);
+  cursor: pointer;
+  transition:
+    color var(--gds-dur) var(--gds-ease),
+    background var(--gds-dur) var(--gds-ease);
+}
+.gds-nav__item:hover {
+  color: var(--gds-text);
+  background: var(--gds-surface);
+}
+.gds-nav__item[aria-current='page'] {
+  color: var(--gds-accent);
+}
+.gds-nav__icon {
+  width: 24px;
+  height: 24px;
+}
+.gds-nav__cart {
+  position: relative;
+}
+.gds-nav__subtotal {
+  font-variant-numeric: tabular-nums;
+  color: var(--gds-text-faint);
+}
+
+/* ===================== Button ===================== */
+
+.gds-btn {
+  --_bg: var(--gds-surface);
+  --_fg: var(--gds-text);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gds-space-2);
+  min-height: var(--gds-touch-min);
+  padding: 0 var(--gds-space-5);
+  border: 1px solid transparent;
+  border-radius: var(--gds-radius-pill);
+  background: var(--_bg);
+  color: var(--_fg);
+  font: inherit;
+  font-weight: 550;
+  font-size: var(--gds-text-base);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition:
+    transform var(--gds-dur-fast) var(--gds-ease),
+    background var(--gds-dur) var(--gds-ease),
+    border-color var(--gds-dur) var(--gds-ease),
+    opacity var(--gds-dur) var(--gds-ease);
+}
+.gds-btn:hover {
+  transform: translateY(-1px);
+}
+.gds-btn:active {
+  transform: translateY(0);
+}
+.gds-btn:disabled,
+.gds-btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+.gds-btn--primary {
+  --_bg: var(--gds-accent);
+  --_fg: var(--gds-on-accent);
+}
+.gds-btn--primary:hover {
+  --_bg: var(--gds-accent-strong);
+}
+.gds-btn--secondary {
+  --_bg: var(--gds-surface);
+  --_fg: var(--gds-text);
+  border-color: var(--gds-line-strong);
+}
+.gds-btn--secondary:hover {
+  --_bg: var(--gds-surface-2);
+}
+.gds-btn--ghost {
+  --_bg: transparent;
+  --_fg: var(--gds-text);
+}
+.gds-btn--ghost:hover {
+  --_bg: var(--gds-surface);
+}
+.gds-btn--danger {
+  --_bg: var(--gds-danger);
+  --_fg: var(--gds-on-accent);
+}
+.gds-btn--block {
+  width: 100%;
+}
+.gds-btn--loading {
+  pointer-events: none;
+  color: transparent;
+}
+.gds-btn__spinner {
+  position: absolute;
+  width: 1.1em;
+  height: 1.1em;
+}
+
+/* ===================== Card ===================== */
+
+.gds-card {
+  background: var(--gds-surface);
+  border: 1px solid var(--gds-line);
+  border-radius: var(--gds-radius-lg);
+  padding: var(--gds-space-5);
+}
+.gds-card--interactive {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    transform var(--gds-dur) var(--gds-ease),
+    border-color var(--gds-dur) var(--gds-ease),
+    background var(--gds-dur) var(--gds-ease);
+}
+.gds-card--interactive:hover {
+  border-color: var(--gds-line-strong);
+  background: var(--gds-surface-2);
+  transform: translateY(-2px);
+}
+
+/* ===================== Badge / Chip ===================== */
+
+.gds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gds-space-1);
+  padding: 2px 8px;
+  border-radius: var(--gds-radius-pill);
+  font-size: var(--gds-text-xs);
+  font-weight: 600;
+  background: var(--gds-surface-2);
+  color: var(--gds-text-muted);
+  line-height: 1.6;
+}
+.gds-badge--accent {
+  background: var(--gds-accent-dim);
+  color: var(--gds-accent-strong);
+}
+.gds-badge--count {
+  min-width: 20px;
+  height: 20px;
+  justify-content: center;
+  padding: 0 6px;
+  background: var(--gds-accent);
+  color: var(--gds-on-accent);
+  position: absolute;
+  top: -2px;
+  right: 50%;
+  transform: translateX(140%);
+}
+.gds-badge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ===================== Skeleton ===================== */
+
+.gds-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--gds-surface);
+  border-radius: var(--gds-radius-sm);
+}
+.gds-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--gds-text) 8%, transparent),
+    transparent
+  );
+  animation: gds-shimmer 1.4s var(--gds-ease) infinite;
+}
+@keyframes gds-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ===================== Spinner ===================== */
+
+.gds-spinner {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: gds-spin 0.7s linear infinite;
+}
+@keyframes gds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===================== Status / Empty / Error blocks ===================== */
+
+.gds-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--gds-space-3);
+  padding: var(--gds-space-7) var(--gds-space-5);
+  border: 1px dashed var(--gds-line);
+  border-radius: var(--gds-radius-lg);
+  color: var(--gds-text-muted);
+}
+.gds-state__icon {
+  width: 40px;
+  height: 40px;
+  color: var(--gds-text-faint);
+}
+.gds-state--error {
+  border-style: solid;
+  border-color: var(--gds-danger-dim);
+  background: var(--gds-danger-dim);
+}
+.gds-state--error .gds-state__icon {
+  color: var(--gds-danger);
+}
+.gds-state__title {
+  color: var(--gds-text);
+  font-size: var(--gds-text-lg);
+}
+
+/* ===================== Utilities ===================== */
+
+.gds-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.gds-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gds-space-4);
+}
+.gds-stack--tight {
+  gap: var(--gds-space-2);
+}
+
+/* Home: the three entry routes (experience-spec.md §3). */
+.gds-home-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--gds-space-4);
+  margin-top: var(--gds-space-3);
+}
+.gds-home-card__title {
+  font-size: var(--gds-text-xl);
+  margin: var(--gds-space-3) 0 var(--gds-space-2);
+}
+.gds-home-card__icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--gds-radius-md);
+  background: var(--gds-surface-2);
+  color: var(--gds-accent);
+}
+.gds-home-grid .gds-card p {
+  color: var(--gds-text-muted);
+}
+
+@media (min-width: 768px) {
+  .gds-home-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.gds-eyebrow {
+  font-size: var(--gds-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gds-accent);
+}
+
+/* Styleguide layout helpers (/experience/styleguide). */
+.gds-sg-heading {
+  font-size: var(--gds-text-sm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gds-text-faint);
+  font-family: var(--gds-font-sans);
+  font-weight: 600;
+  padding-top: var(--gds-space-4);
+  border-top: 1px solid var(--gds-line);
+}
+.gds-sg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gds-space-3);
+}
+.gds-lede {
+  color: var(--gds-text-muted);
+  font-size: var(--gds-text-lg);
+  max-width: 60ch;
+}
+
+/* ===================== Responsive (tablet-first iPad) ===================== */
+
+@media (min-width: 768px) {
+  .gds-content {
+    padding-inline: var(--gds-space-6);
+  }
+  /* On larger tablets the nav stays bottom but items gain breathing room. */
+  .gds-nav {
+    padding-inline: var(--gds-space-6);
+  }
+}
+
+/* Narrow phones (fallback; primary target is iPad). */
+@media (max-width: 420px) {
+  .gds-content {
+    padding-inline: var(--gds-space-4);
+  }
+  .gds-nav__item {
+    font-size: 0.7rem;
+  }
+}
+
+/*
+ * Reduced motion: transitions already collapse via the reduced-motion :root
+ * token override (globals.css). Here we additionally stop the looping
+ * animations by targeting their own selectors at matching specificity in later
+ * source order — so no !important is needed.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .gds-skeleton::after {
+    animation: none;
+  }
+  .gds-spinner {
+    animation: none;
+    border-top-color: color-mix(in srgb, currentColor 28%, transparent);
+  }
+  .gds-btn:hover,
+  .gds-card--interactive:hover {
+    transform: none;
+  }
+}

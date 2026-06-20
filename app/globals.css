@@ -1,13 +1,94 @@
 @import 'tailwindcss';
 
 /*
- * Neutral base only. The AETHER design system and tokens land in epic E1
- * (docs/delivery/backlog.md); this stylesheet exists so the baseline stack
- * (Tailwind/PostCSS) compiles end-to-end without pre-empting that work.
+ * AETHER design tokens (epic E1).
+ *
+ * This block is the single source of truth for the guest design system's
+ * primitive tokens — color, space, radius, type scale, motion, and focus.
+ * Tokens are defined here at :root so they are app-wide and reusable; the DARK
+ * guest THEME and component styles that consume them are scoped to the guest
+ * shell (app/(guest)/guest.css under `.gds`), so defining tokens here does not
+ * restyle the marketing or staff/admin surfaces. Documented in /DESIGN.md.
+ *
+ * Direction (ux/experience-spec.md §1): dark, high-contrast, warm, minimal,
+ * editorial — never neon sci-fi.
  */
 
 :root {
   color-scheme: light dark;
+
+  /* --- Color: warm dark palette --- */
+  --gds-bg: #14110d; /* warm near-black base */
+  --gds-surface: #1d1814; /* card / raised */
+  --gds-surface-2: #271f19; /* elevated / hover */
+  --gds-overlay: rgba(10, 8, 6, 0.66); /* scrims, privacy lock */
+
+  --gds-text: #f5efe6; /* warm off-white, AA on bg */
+  --gds-text-muted: #b9ab98; /* secondary, AA on bg */
+  --gds-text-faint: #8a7c6a; /* tertiary / disabled label */
+  --gds-on-accent: #1a130a; /* text on accent fills */
+
+  --gds-accent: #e2a24a; /* warm ember/gold */
+  --gds-accent-strong: #f0b25c; /* hover */
+  --gds-accent-dim: rgba(226, 162, 74, 0.16); /* tint / wash */
+
+  /* Status colors are always paired with an icon + text, never color alone. */
+  --gds-success: #87c39a;
+  --gds-warning: #e7b463;
+  --gds-danger: #e8896f;
+  --gds-danger-dim: rgba(232, 137, 111, 0.16);
+
+  --gds-line: rgba(245, 239, 230, 0.12);
+  --gds-line-strong: rgba(245, 239, 230, 0.22);
+
+  /* --- Space scale (4px base) --- */
+  --gds-space-1: 0.25rem;
+  --gds-space-2: 0.5rem;
+  --gds-space-3: 0.75rem;
+  --gds-space-4: 1rem;
+  --gds-space-5: 1.5rem;
+  --gds-space-6: 2rem;
+  --gds-space-7: 3rem;
+  --gds-space-8: 4rem;
+
+  /* --- Radius --- */
+  --gds-radius-sm: 0.5rem;
+  --gds-radius-md: 0.875rem;
+  --gds-radius-lg: 1.25rem;
+  --gds-radius-pill: 999px;
+
+  /* --- Type scale --- */
+  --gds-text-xs: 0.78rem;
+  --gds-text-sm: 0.9rem;
+  --gds-text-base: 1rem;
+  --gds-text-lg: 1.18rem;
+  --gds-text-xl: 1.5rem;
+  --gds-text-2xl: 2rem;
+  --gds-text-3xl: 2.75rem;
+
+  /* --- Motion --- */
+  --gds-dur-fast: 120ms;
+  --gds-dur: 200ms;
+  --gds-dur-slow: 320ms;
+  --gds-ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* --- Accessibility --- */
+  --gds-touch-min: 44px; /* WCAG 2.2 AA target floor */
+  --gds-touch-comfort: 52px; /* tablet comfort target */
+  --gds-focus-ring: 0 0 0 3px var(--gds-bg), 0 0 0 5px var(--gds-accent);
+
+  /* Elevation */
+  --gds-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --gds-shadow-2: 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* Honour OS reduced-motion as a token other rules can read. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --gds-dur-fast: 0.001ms;
+    --gds-dur: 0.001ms;
+    --gds-dur-slow: 0.001ms;
+  }
 }
 
 html,
