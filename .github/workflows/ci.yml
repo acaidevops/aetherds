@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify (typecheck, lint, format, architecture, tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      # Mirrors the local `verify` gate. Tests seed their own env via
+      # tests/setup.ts, so no secrets are needed here.
+      - run: npm run verify
+
+  build:
+    name: Production build (next build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        # `next build` eagerly validates server env at import time. These are
+        # throwaway placeholders that satisfy the schema for a build-only check;
+        # they are NOT secrets and are never used to reach a real service.
+        env:
+          APP_ENV: development
+          SUPABASE_URL: http://127.0.0.1:54321
+          SUPABASE_SERVICE_ROLE_KEY: ci-placeholder
+          SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54321/postgres
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          OPENAI_API_KEY: ci-placeholder
+          SPOTON_CLIENT_ID: ci-placeholder
+          SPOTON_CLIENT_SECRET: ci-placeholder
+          SPOTON_SANDBOX_BASE_URL: https://sandbox.example.com
+          LOG_LEVEL: warn
