@@ -163,4 +163,3 @@ $$;
 -- policy evaluation calls them at query time.
 revoke all on function app.enable_tenant_rls(regclass, boolean, text) from public;
 revoke all on function app.enable_tenant_rls(regclass, boolean, text) from authenticated, anon;
-

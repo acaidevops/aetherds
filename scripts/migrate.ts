@@ -16,6 +16,8 @@
  *   applied file's contents, so editing an already-applied migration is
  *   detected and fails loudly rather than silently skipping the new SQL (which
  *   would leave a reused local/staging DB on a schema different from the repo).
+ *   Every applied row must carry a checksum; a missing one is also treated as
+ *   drift, since the on-disk SQL can no longer be proven to match what ran.
  * - Each migration file runs in its OWN transaction (not one mega-transaction):
  *   this matches Supabase CLI semantics and survives future non-transactional
  *   DDL (e.g. CREATE INDEX CONCURRENTLY).
@@ -95,12 +97,22 @@ async function main(): Promise<void> {
     const applied = await appliedFiles(pool);
 
     // Fail loudly if an already-applied migration's contents changed on disk.
-    // (Legacy rows with a null checksum predate this column and are skipped.)
+    // Every applied row must carry a checksum: this runner has always recorded
+    // one, so a null means the row was written by some other tool (or hand-
+    // edited) and we can't prove the on-disk SQL matches what ran — treat it as
+    // drift rather than silently trusting it.
     for (const file of files) {
       if (!applied.has(file)) continue;
       const recorded = applied.get(file);
-      if (recorded == null) continue;
       const current = checksumOf(readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'));
+      if (recorded == null) {
+        throw new Error(
+          `Applied migration ${file} has no recorded checksum, so it cannot be ` +
+            `verified against the file on disk. Reset the database to re-apply ` +
+            `from scratch, or backfill ${HISTORY_TABLE}.checksum if you are ` +
+            `certain the applied schema matches the repository.`,
+        );
+      }
       if (current !== recorded) {
         throw new Error(
           `Applied migration ${file} has been edited since it was applied ` +
