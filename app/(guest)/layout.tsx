@@ -4,6 +4,7 @@ import { Fraunces, Inter } from 'next/font/google';
 
 import './guest.css';
 import { GuestShell } from './_shell/guest-shell';
+import { GuestNavConnected } from './_shell/guest-nav-connected';
 
 /**
  * Guest surface shell (route group `(guest)`, epic E1).
@@ -43,7 +44,7 @@ export const viewport: Viewport = {
 export default function GuestLayout({ children }: { readonly children: ReactNode }): ReactNode {
   return (
     <div className={`gds ${sans.variable} ${display.variable}`}>
-      <GuestShell>{children}</GuestShell>
+      <GuestShell nav={<GuestNavConnected />}>{children}</GuestShell>
     </div>
   );
 }

@@ -79,10 +79,12 @@ error, empty, skeleton**. Verify the interactive ones live at
 
 `GuestShell` provides the persistent chrome (experience-spec.md §3): a top bar
 with the abstract AETHER mark, and a bottom nav with **Home, Menu, Cart (count +
-estimated subtotal), Call server**. Cart figures and the active item are props
-today; session/cart state wires them in E2/F1. Navigation and call-server
-behavior are deferred to those epics — the controls are real, focusable buttons
-with correct semantics.
+estimated subtotal), Call server**. The controls are real `<Link>`s to their
+routes, and the active item is derived from the current path behind a thin
+client boundary (`GuestNavConnected`), keeping the rest of the shell server-
+rendered. The Menu/Cart/Call/Guide destinations are honest placeholders today;
+their full flows arrive in E2/E5/F and the service-requests epic. Cart count and
+subtotal are props until cart/session state wires them in E2/F1.
 
 ## Boundaries
 

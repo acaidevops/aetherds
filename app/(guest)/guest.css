@@ -44,6 +44,13 @@
   border-radius: var(--gds-radius-sm);
 }
 
+/* Links inherit text color and drop underlines; the card/nav classes provide
+ * their own affordances. Buttons are <button>, so this never clobbers them. */
+.gds a {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* ===================== Shell ===================== */
 
 .gds-shell {
@@ -173,9 +180,6 @@
     border-color var(--gds-dur) var(--gds-ease),
     opacity var(--gds-dur) var(--gds-ease);
 }
-.gds-btn:hover {
-  transform: translateY(-1px);
-}
 .gds-btn:active {
   transform: translateY(0);
 }
@@ -222,6 +226,9 @@
   position: absolute;
   width: 1.1em;
   height: 1.1em;
+  /* The label is hidden via transparent text, but the spinner must stay
+   * visible — pin it to the button's foreground token, not currentColor. */
+  color: var(--_fg);
 }
 
 /* ===================== Card ===================== */
@@ -247,7 +254,20 @@
 .gds-card--interactive:hover {
   border-color: var(--gds-line-strong);
   background: var(--gds-surface-2);
-  transform: translateY(-2px);
+}
+
+/*
+ * Movement-based hover feedback is gated to hover-capable, fine pointers so it
+ * never triggers as sticky/unintended motion on the managed iPad. Touch keeps
+ * the non-motion feedback (background/border) above and :active below.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .gds-btn:hover {
+    transform: translateY(-1px);
+  }
+  .gds-card--interactive:hover {
+    transform: translateY(-2px);
+  }
 }
 
 /* ===================== Badge / Chip ===================== */

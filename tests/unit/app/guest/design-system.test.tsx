@@ -7,6 +7,7 @@ import { Card, InteractiveCard } from '@/app/(guest)/_ui/card';
 import { EmptyState, ErrorState } from '@/app/(guest)/_ui/states';
 import { Spinner } from '@/app/(guest)/_ui/spinner';
 import { GuestShell } from '@/app/(guest)/_shell/guest-shell';
+import { GuestNav } from '@/app/(guest)/_shell/guest-nav';
 import GuestHomePage from '@/app/(guest)/experience/page';
 
 /**
@@ -86,16 +87,31 @@ describe('Spinner / states', () => {
 });
 
 describe('GuestShell', () => {
+  it('renders the AETHER mark, the route content, and the injected nav slot', () => {
+    const html = renderToStaticMarkup(
+      <GuestShell nav={<nav aria-label="test nav" />}>
+        <p>route content</p>
+      </GuestShell>,
+    );
+    expect(html).toContain('Aether');
+    expect(html).toContain('route content');
+    expect(html).toContain('aria-label="test nav"');
+  });
+});
+
+describe('GuestNav', () => {
   const html = renderToStaticMarkup(
-    <GuestShell active="menu" cartCount={2} cartSubtotalLabel="$24.00">
-      <p>content</p>
-    </GuestShell>,
+    <GuestNav active="menu" cartCount={2} cartSubtotalLabel="$24.00" />,
   );
 
-  it('renders the four persistent controls', () => {
+  it('renders the four persistent controls as links to their routes', () => {
     for (const label of ['Home', 'Menu', 'Cart', 'Call server']) {
       expect(html).toContain(label);
     }
+    expect(html).toContain('href="/experience"');
+    expect(html).toContain('href="/experience/menu"');
+    expect(html).toContain('href="/experience/cart"');
+    expect(html).toContain('href="/experience/call"');
   });
 
   it('marks the active item with aria-current and surfaces cart figures', () => {
@@ -106,6 +122,20 @@ describe('GuestShell', () => {
 
   it('labels the navigation landmark', () => {
     expect(html).toContain('aria-label="Guest navigation"');
+  });
+
+  it('does not mark any item active when none matches', () => {
+    const none = renderToStaticMarkup(<GuestNav />);
+    expect(none).not.toContain('aria-current');
+  });
+});
+
+describe('Guest home links', () => {
+  it('routes the three entries to their destinations', () => {
+    const html = renderToStaticMarkup(<GuestHomePage />);
+    expect(html).toContain('href="/experience/guide"');
+    expect(html).toContain('href="/experience/menu"');
+    expect(html).toContain('href="/experience/call"');
   });
 });
 
