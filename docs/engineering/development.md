@@ -95,6 +95,15 @@ must not be imported by another module.
 - Use RLS for every client-reachable tenant table.
 - Use PostgreSQL advisory/row locks for worker claims and critical transitions.
 
+Migrations live in `supabase/migrations/` and apply via `supabase db push` (real
+environments) or `npm run db:migrate` (plain PostgreSQL, used by CI). Tenant
+isolation is enforced by the RLS mechanism in
+[ADR 0012](../adr/0012-rls-mechanism.md): new tenant-owned tables call
+`app.enable_tenant_rls('<table>'::regclass, p_has_location := <bool>)` to get
+deny-by-default, per-command policies scoped by `restaurant_id`/`location_id`,
+and each carries an automated cross-tenant negative test under
+`tests/integration/`.
+
 ## 5. Outbox/jobs
 
 - Domain transition and outbox insertion share one transaction.
