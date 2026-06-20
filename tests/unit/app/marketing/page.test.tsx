@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import LandingPage from '@/app/(marketing)/page';
-import GuestExperiencePage from '@/app/(guest)/experience/page';
 
 /**
  * The marketing landing page is a server component with no async data, so it can
@@ -39,13 +38,5 @@ describe('marketing landing page', () => {
 
   it('does not leak inline style attributes (styles live in marketing.css)', () => {
     expect(html).not.toContain('style=');
-  });
-});
-
-describe('relocated guest experience page', () => {
-  it('renders at /experience as a placeholder', () => {
-    const html = renderToStaticMarkup(<GuestExperiencePage />);
-    expect(html).toContain('AETHER');
-    expect(html).toContain('under construction');
   });
 });
