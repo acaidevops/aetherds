@@ -81,5 +81,34 @@ export default tseslint.config(
     },
   },
 
+  {
+    // `pg` is a server/tooling-only dependency (migration runner + integration
+    // tests). Application code must reach the database through the Supabase
+    // client seam (src/shared/db) so the driver never ships in the client
+    // bundle. dependency-cruiser only codifies module folders, so this rule is
+    // the actual guard against a stray `pg` import under app/ or src/.
+    files: ['**/*.{ts,tsx,js,mjs}'],
+    ignores: ['scripts/**', 'tests/integration/**', 'vitest.config.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'pg',
+              message:
+                "Import the Supabase client from '@/shared/db' instead of 'pg' directly. The pg driver is server/tooling-only and must not ship in the client bundle.",
+            },
+            {
+              name: 'node:pg',
+              message:
+                "Import the Supabase client from '@/shared/db' instead of 'pg' directly. The pg driver is server/tooling-only and must not ship in the client bundle.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   prettierConfig,
 );
