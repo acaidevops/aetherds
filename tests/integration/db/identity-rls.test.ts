@@ -105,16 +105,31 @@ describeOrSkip('Identity RLS (B1)', () => {
     expect(ids).not.toContain(MEMB_MGR_B);
   });
 
-  it('rejects a cross-tenant membership INSERT (WITH CHECK live)', async () => {
+  it('is read-only to clients: a member cannot INSERT a membership', async () => {
+    // Memberships are written only by service-role server commands. A scoped
+    // client has no INSERT privilege, so even a same-tenant insert is rejected.
     await expect(
       asTenant(pool, mgrA, async (c) => {
         await c.query(
           `insert into memberships (restaurant_id, location_id, user_id, role)
            values ($1,$2,$3,'server')`,
-          [R_B, L_B1, USER_SRV_A],
+          [R_A, L_A1, USER_MGR_A],
         );
       }),
-    ).rejects.toThrow(/row-level security/i);
+    ).rejects.toThrow(/permission denied|row-level security/i);
+  });
+
+  it('is read-only to clients: a server cannot escalate their own role', async () => {
+    // The core privilege-escalation guard: a server promoting itself to owner.
+    await expect(
+      asTenant(
+        pool,
+        { restaurantId: R_A, locationId: L_A1, appRole: 'server', userId: USER_SRV_A },
+        async (c) => {
+          await c.query("update memberships set role = 'owner' where id = $1", [MEMB_SRV_A]);
+        },
+      ),
+    ).rejects.toThrow(/permission denied|row-level security/i);
   });
 
   it('reveals own row + co-members, never another tenant’s user', async () => {
@@ -127,10 +142,54 @@ describeOrSkip('Identity RLS (B1)', () => {
     expect(ids).not.toContain(USER_MGR_B); // other tenant
   });
 
-  it('does not expose memberships to an unscoped platform_operator (helper has no blanket bypass)', async () => {
-    // app.enable_tenant_rls scopes strictly by restaurant+location. A
-    // platform_operator carries no tenant scope, so it reads zero memberships
-    // through RLS by design — cross-tenant support access is explicit/scoped
+  it('lets a user edit display_name but not email or status (column grant)', async () => {
+    // Row policy allows self-update; the column grant (display_name only) limits
+    // which columns are writable. Postgres rejects the ungranted-column writes
+    // ("permission denied for table/column users"), so email/status are safe.
+    await asTenant(pool, mgrA, async (c) => {
+      await c.query('update users set display_name = $1 where id = $2', ['Renamed', USER_MGR_A]);
+    });
+    await expect(
+      asTenant(pool, mgrA, async (c) => {
+        await c.query('update users set email = $1 where id = $2', ['x@y.z', USER_MGR_A]);
+      }),
+    ).rejects.toThrow(/permission denied/i);
+    await expect(
+      asTenant(pool, mgrA, async (c) => {
+        await c.query("update users set status = 'active' where id = $1", [USER_MGR_A]);
+      }),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it('a suspended account does not resolve even with an active membership (repo join filter)', async () => {
+    // Replicates the repository's inner-join filter (membership active AND
+    // account active). Suspending the account in-transaction excludes the row.
+    const before = await asService(pool, async (c) => {
+      const r = await c.query(
+        `select m.id from memberships m join users u on u.id = m.user_id
+         where m.user_id = $1 and m.status = 'active' and u.status = 'active'`,
+        [USER_SRV_A],
+      );
+      return r.rows.length;
+    });
+    expect(before).toBe(1);
+
+    const afterSuspend = await asService(pool, async (c) => {
+      await c.query("update users set status = 'suspended' where id = $1", [USER_SRV_A]);
+      const r = await c.query(
+        `select m.id from memberships m join users u on u.id = m.user_id
+         where m.user_id = $1 and m.status = 'active' and u.status = 'active'`,
+        [USER_SRV_A],
+      );
+      return r.rows.length; // transaction rolls back, so no persistence
+    });
+    expect(afterSuspend).toBe(0);
+  });
+
+  it('does not expose memberships to an unscoped platform_operator', async () => {
+    // The read policy scopes strictly by restaurant+location, with no platform
+    // bypass. A platform_operator carries no tenant scope, so it reads zero
+    // memberships — cross-tenant support access is explicit/scoped
     // (support_sessions), not a blanket bypass on tenant-owned tables.
     const ids = await asTenant(pool, { appRole: 'platform_operator' }, async (c) => {
       const r = await c.query('select id from memberships');

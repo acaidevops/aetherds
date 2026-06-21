@@ -79,8 +79,23 @@ create trigger trg_memberships_updated_at
 -- RLS policies (tables now exist, so cross-references resolve).
 -- ---------------------------------------------------------------------------
 
--- memberships: reusable deny-by-default tenant isolation (restaurant+location).
-select app.enable_tenant_rls('memberships'::regclass, p_has_location := true);
+-- memberships: tenant-isolated, but READ-ONLY to client roles.
+--
+-- We deliberately do NOT use app.enable_tenant_rls here: that helper grants
+-- scoped principals INSERT/UPDATE/DELETE, which would let a server promote their
+-- own membership to owner, create memberships, or revoke coworkers directly
+-- through PostgREST. Membership lifecycle (grant/revoke/change-role) is a
+-- privileged SERVER command — performed with the service-role client (RLS-
+-- exempt) and gated by role + step-up reauthentication (authorizeStaffCommand).
+-- Clients may only READ memberships within their own scope; the missing write
+-- policies (plus select-only grants below) deny every client write.
+alter table memberships enable row level security;
+
+create policy memberships_tenant_read on memberships
+  for select
+  using (
+        (restaurant_id = app.current_restaurant_id() and location_id = app.current_location_id())
+  );
 
 -- users visibility:
 --   * a user always sees their own row,
@@ -102,26 +117,29 @@ create policy users_read on users
         )
   );
 
--- Write: a user may maintain their own profile; platform support may write any.
--- Account CREATION happens server-side via the Supabase admin path (service
--- role, RLS-exempt) — clients never insert arbitrary accounts.
-create policy users_self_write on users
+-- Write: a user may update only their OWN row. Which COLUMNS they can change is
+-- constrained by the column-level grant below (display_name only) — the row
+-- policy alone cannot restrict columns. Sensitive fields (email, status) and
+-- account creation/deactivation are privileged SERVER operations performed with
+-- the service-role client (RLS-exempt); clients can never self-promote a
+-- suspended account back to active or change their email.
+create policy users_self_profile_update on users
   for update
-  using (id = app.current_user_id() or app.current_role() = 'platform_operator')
-  with check (id = app.current_user_id() or app.current_role() = 'platform_operator');
-
-create policy users_platform_insert on users
-  for insert
-  with check (app.current_role() = 'platform_operator');
-
-create policy users_platform_delete on users
-  for delete
-  using (app.current_role() = 'platform_operator');
+  using (id = app.current_user_id())
+  with check (id = app.current_user_id());
 
 -- ---------------------------------------------------------------------------
 -- Privileges. RLS filters rows, but the client-reachable roles still need table
 -- privileges to reach policy evaluation (required in plain-Postgres CI;
 -- complements Supabase defaults in production). Idempotent.
+--
+-- memberships: SELECT only — all writes go through service-role server commands.
+-- users: SELECT plus a COLUMN-SCOPED update on display_name only, so email and
+-- status can never be changed by a client even though the row policy matches.
+-- INSERT/DELETE on users are not granted to client roles (account lifecycle is
+-- service-role only).
 -- ---------------------------------------------------------------------------
 
-grant select, insert, update, delete on users, memberships to authenticated, anon;
+grant select on memberships to authenticated, anon;
+grant select on users to authenticated, anon;
+grant update (display_name) on users to authenticated, anon;

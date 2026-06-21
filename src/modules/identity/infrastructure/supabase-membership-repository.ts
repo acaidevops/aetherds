@@ -43,14 +43,21 @@ export class SupabaseMembershipRepository implements MembershipRepository {
     this.client = client;
   }
 
+  // `users!inner(status)` + the status filter require the OWNER ACCOUNT to be
+  // active, not just the membership — a suspended account must never resolve to
+  // a principal even while its membership rows remain `active`.
+  private static readonly SELECT =
+    'id, user_id, restaurant_id, location_id, role, status, users!inner(status)';
+
   async findActiveMembership(userId: string, scope: TenantScope): Promise<Membership | null> {
     const { data, error } = await this.client
       .from('memberships')
-      .select('id, user_id, restaurant_id, location_id, role, status')
+      .select(SupabaseMembershipRepository.SELECT)
       .eq('user_id', userId)
       .eq('restaurant_id', scope.restaurantId)
       .eq('location_id', scope.locationId)
       .eq('status', 'active')
+      .eq('users.status', 'active')
       .maybeSingle<MembershipRow>();
 
     if (error) {
@@ -62,9 +69,10 @@ export class SupabaseMembershipRepository implements MembershipRepository {
   async listActiveMemberships(userId: string): Promise<readonly Membership[]> {
     const { data, error } = await this.client
       .from('memberships')
-      .select('id, user_id, restaurant_id, location_id, role, status')
+      .select(SupabaseMembershipRepository.SELECT)
       .eq('user_id', userId)
       .eq('status', 'active')
+      .eq('users.status', 'active')
       .returns<MembershipRow[]>();
 
     if (error) {

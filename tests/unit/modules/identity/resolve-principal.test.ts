@@ -45,6 +45,17 @@ describe('resolveStaffPrincipal', () => {
     ).rejects.toBeInstanceOf(AuthScopeDeniedError);
   });
 
+  it('denies an active membership when the user ACCOUNT is suspended', async () => {
+    // The membership row is active, but the owning account is suspended — it
+    // must not resolve (the repository requires both to be active).
+    const memberships = new InMemoryMembershipRepository([membership()], {
+      accountStatusByUserId: { u1: 'suspended' },
+    });
+    await expect(
+      resolveStaffPrincipal({ userId: 'u1', scope: SCOPE, memberships }),
+    ).rejects.toBeInstanceOf(AuthScopeDeniedError);
+  });
+
   it('denies access to a location the user is not a member of', async () => {
     const memberships = new InMemoryMembershipRepository([membership()]);
     await expect(
