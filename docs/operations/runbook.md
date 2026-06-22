@@ -176,3 +176,25 @@ Location pause must:
 - Root cause
 - Corrective/preventive work
 
+## 11. Telemetry and audit
+
+OpenTelemetry traces and metrics (ADR 0013) are initialized in
+`instrumentation.ts`. They export over OTLP/HTTP when
+`OTEL_EXPORTER_OTLP_ENDPOINT` is configured and to the console otherwise, so
+local and CI run with no telemetry config. Every request and response carries a
+correlation id (`x-correlation-id`) that ties logs, spans, metrics, and audit
+events together across the session → order → outbox chain.
+
+During diagnosis:
+
+- Filter traces, logs, and metrics by the incident's correlation id(s).
+- `audit_events` is the append-only actor/action/correlation trail
+  (security-privacy.md §7). Query it by `correlation_id`, `restaurant_id`, or
+  `action`. Platform operators read all rows; a tenant reads only its own scope.
+- Never attempt `UPDATE` or `DELETE` on `audit_events`: a trigger rejects
+  mutation for every role, including the service role. Correct the record by
+  appending a superseding entry, not by editing history.
+
+`audit_events` rows are retained for 1 year (security-privacy.md §12); the
+purge is a future scheduled job (ADR 0011).
+

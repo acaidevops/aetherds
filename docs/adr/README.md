@@ -14,6 +14,7 @@
 | [0010](0010-tenant-isolation.md) | Tenant isolation is database-enforced |
 | [0011](0011-worker-runtime-and-scheduling.md) | Supabase Edge Functions process the PostgreSQL outbox with wake-up and scheduled recovery |
 | [0012](0012-rls-mechanism.md) | Row-Level Security reads tenant scope from the JWT claims GUC, denies by default, and is testable in plain PostgreSQL |
+| [0013](0013-observability-and-audit.md) | OpenTelemetry traces/metrics, redacted context-aware logging, and a trigger-enforced append-only audit trail |
 
 ADRs are immutable historical records. To change a decision, add a new ADR that supersedes the old one.
 

@@ -204,7 +204,9 @@ describeOrSkip('RLS cross-tenant isolation (ADR 0010)', () => {
       const r = await c.query('select id from restaurants order by id');
       return (r.rows as { id: string }[]).map((row) => row.id);
     });
-    expect(seen).toEqual([RESTAURANT_A, RESTAURANT_B]);
+    // Other integration suites may seed their own restaurants on the shared DB;
+    // assert our fixtures are visible (cross-tenant), not that they are the only rows.
+    expect(seen).toEqual(expect.arrayContaining([RESTAURANT_A, RESTAURANT_B]));
   });
 
   it('app.enable_tenant_rls isolates a downstream table by restaurant AND location', async () => {

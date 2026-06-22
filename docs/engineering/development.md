@@ -130,12 +130,32 @@ and each carries an automated cross-tenant negative test under
 
 ## 7. Observability
 
+Telemetry is OpenTelemetry (ADR 0013). Traces and metrics are initialized in
+`instrumentation.ts`, which is gated to skip the production build and the Edge
+runtime; it exports over OTLP/HTTP when `OTEL_EXPORTER_OTLP_ENDPOINT` is set and
+to the console otherwise, so local and CI run with zero telemetry config.
+Application code wraps command paths with `withSpan` and records a
+request-duration histogram through the `src/shared/observability` seam rather
+than touching the OTel API directly. Correlation id and tenant scope flow
+through an `AsyncLocalStorage` request context established by
+`withRequestObservability`; the child logger auto-attaches them and redacts the
+security-privacy.md §7 prohibited fields.
+
 Trace:
 
 ```text
 dining session → order batch → approval group → outbox job
 → SpotOn attempt → acknowledgment/reconciliation
 ```
+
+Audit: privileged and state-changing operations append to `audit_events`
+(migration 00000000000002) — actor, action, scope, reason, correlation id,
+outcome, and opaque before/after references. The table is append-only by trigger
+(fires even for the service role) and tenant-isolated: a platform operator reads
+all rows, a tenant reads only its own `restaurant_id`, anon reads none. The
+`recordAuditEvent` service derives scope/actor/correlation from the request
+context, never from client input. Retention is 1 year (§12), enforced by a
+future scheduled job (ADR 0011).
 
 Alert on:
 
