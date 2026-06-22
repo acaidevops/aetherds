@@ -79,6 +79,11 @@ export default defineConfig({
           // connection and seed state (see tests/integration/db/helpers.ts).
           include: ['tests/integration/**/*.test.ts'],
           exclude: ['node_modules/**', '.next/**'],
+          // Integration files share ONE database, so they must run serially —
+          // otherwise one file's committed seed leaks into another's "read all"
+          // assertions (e.g. platform_operator reading every restaurant). Each
+          // file's beforeAll/afterAll then fully brackets its own fixtures.
+          fileParallelism: false,
         },
       },
     ],

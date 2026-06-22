@@ -34,6 +34,8 @@ export interface TenantClaims {
   /** AETHER application role; carried as the `app_role` claim (NOT `role`). */
   appRole: string;
   deviceId?: string;
+  /** Authenticated user id; carried as the standard `sub` claim (auth.uid()). */
+  userId?: string;
 }
 
 /**
@@ -64,6 +66,7 @@ export async function asTenant<T>(
       role: 'authenticated',
       app_role: claims.appRole,
       device_id: claims.deviceId ?? null,
+      sub: claims.userId ?? null,
     };
     await client.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify(jwt)]);
     const result = await body(client);
