@@ -61,3 +61,24 @@ function walk(value: unknown): unknown {
   }
   return value;
 }
+
+/**
+ * Reduce an arbitrary thrown value to log-safe metadata: a stable error TYPE and
+ * (when present) a short, stable error CODE — never the raw `message`.
+ *
+ * Key-based {@link redact} cannot inspect sensitive substrings inside a free-form
+ * error string, and database/provider errors routinely embed payloads,
+ * credentials, allergy details, or prompts in their messages. So we never log
+ * `err.message`; we log the class name and a code (SQLSTATE, ApiError code,
+ * provider error code), which are stable and non-sensitive.
+ */
+export function sanitizeError(err: unknown): { errorType: string; errorCode?: string | number } {
+  if (err instanceof Error) {
+    const errorType = err.name && err.name !== 'Error' ? err.name : err.constructor.name;
+    const code = (err as { code?: unknown }).code;
+    return typeof code === 'string' || typeof code === 'number'
+      ? { errorType, errorCode: code }
+      : { errorType };
+  }
+  return { errorType: typeof err };
+}

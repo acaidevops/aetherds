@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import { redact } from '@/shared/observability';
+import { redact, sanitizeError } from '@/shared/observability';
+
+describe('sanitizeError', () => {
+  it('returns a stable type and code, never the raw message', () => {
+    class DbError extends Error {
+      code = '23505';
+      constructor() {
+        super('duplicate key value violates unique constraint "secret_payload_here"');
+        this.name = 'DbError';
+      }
+    }
+    const out = sanitizeError(new DbError());
+    expect(out).toEqual({ errorType: 'DbError', errorCode: '23505' });
+    expect(JSON.stringify(out)).not.toMatch(/secret_payload_here/);
+  });
+
+  it('omits the code when absent and handles non-Error throwables', () => {
+    expect(sanitizeError(new Error('boom'))).toEqual({ errorType: 'Error' });
+    expect(sanitizeError('a string')).toEqual({ errorType: 'string' });
+  });
+});
 
 describe('redact', () => {
   it('redacts every §7 prohibited key category', () => {

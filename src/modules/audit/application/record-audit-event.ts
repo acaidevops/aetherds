@@ -56,6 +56,17 @@ export function __setDefaultAuditRepoFactoryForTests(
   };
 }
 
+/** Cap on stored reason length — reason is a short operational note, never a
+ * dumping ground for guest text or payloads in the immutable trail. */
+const MAX_REASON_LENGTH = 500;
+
+/** Redact token-shaped secrets from a free-form reason and bound its length. */
+function sanitizeReason(reason?: string | null): string | null {
+  if (!reason) return null;
+  const redacted = redact(reason);
+  return redacted.length > MAX_REASON_LENGTH ? redacted.slice(0, MAX_REASON_LENGTH) : redacted;
+}
+
 export async function recordAuditEvent(
   input: AuditEventInput,
   deps: RecordAuditEventDeps = {},
@@ -74,7 +85,11 @@ export async function recordAuditEvent(
     correlationId: ctx.correlationId,
     action: input.action,
     outcome: input.outcome,
-    reason: input.reason ?? null,
+    // reason is free-form operational text, so it gets the same defensive
+    // treatment as before/after: token-shaped secrets are redacted and the
+    // value is length-bounded, since the audit trail is immutable and
+    // security-privacy.md §7 prohibits credentials/PII/guest text being stored.
+    reason: sanitizeReason(input.reason),
     // before/after are meant to be opaque references, but the audit trail is
     // immutable and security-privacy.md §7 prohibits credentials/payment/PII in
     // any persisted record. Redact defensively so a caller that mistakenly

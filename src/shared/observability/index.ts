@@ -16,7 +16,7 @@ export {
   type RequestActorType,
 } from './context';
 
-export { redact } from './redaction';
+export { redact, sanitizeError } from './redaction';
 
 export { createLogger, logger, type Logger } from './logger';
 

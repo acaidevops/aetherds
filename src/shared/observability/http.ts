@@ -6,6 +6,7 @@ import { CORRELATION_HEADER, resolveCorrelationId } from './correlation';
 import { withRequestContext, type RequestContext } from './context';
 import { logger } from './logger';
 import { recordRequestDuration } from './metrics';
+import { sanitizeError } from './redaction';
 import { withSpan } from './tracing';
 
 /**
@@ -50,10 +51,10 @@ export function withRequestObservability(handler: RouteHandler): RouteHandler {
           return response;
         } catch (err) {
           status = 500;
-          logger.error('request failed', {
-            route,
-            error: err instanceof Error ? err.message : String(err),
-          });
+          // Never log err.message — it can embed payloads/credentials/PII that
+          // key-based redaction can't see inside a free-form string. Log a
+          // stable type + code instead.
+          logger.error('request failed', { route, ...sanitizeError(err) });
           throw err;
         } finally {
           const durationMs = Date.now() - startedAt;

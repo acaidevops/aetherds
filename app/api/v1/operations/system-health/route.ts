@@ -2,11 +2,10 @@ import 'server-only';
 
 import { type NextResponse } from 'next/server';
 
-import { recordAuditEvent } from '@/modules/audit';
 import { getSystemHealth } from '@/modules/platform-operations';
 import { serverEnv } from '@/shared/config';
 import { apiErrorResponse, apiResponse } from '@/shared/http';
-import { getCorrelationId, logger, withRequestObservability } from '@/shared/observability';
+import { getCorrelationId, withRequestObservability } from '@/shared/observability';
 import { ApiError } from '@/shared/validation';
 
 /**
@@ -25,25 +24,23 @@ import { ApiError } from '@/shared/validation';
  * A4 observability: the handler runs inside {@link withRequestObservability},
  * which establishes the correlation {@link RequestContext}, wraps the call in a
  * trace span, records a request-duration histogram, and emits one structured
- * log — the proof of "metrics/traces for core command path". It also records a
- * best-effort `platform.accessed` audit event, exercising request → context →
- * audit service → append-only table end to end. The audit write is awaited in
- * `finally` and swallows its own failures, so a telemetry/DB hiccup can never
- * change a health response. Every response carries the x-correlation-id header
- * (api-contracts.md §1).
+ * log — the proof of "metrics/traces for core command path". This is a liveness
+ * probe, so it deliberately does NOT write an audit event: a health check must
+ * stay fast and independent of database latency, and auditing every poll would
+ * flood the immutable trail. The audit service is exercised by its own tests and
+ * by the real audited commands (order approval, membership changes) in their
+ * epics. Every response carries the x-correlation-id header (api-contracts.md §1).
  */
 async function getSystemHealthRoute(): Promise<NextResponse> {
   // withRequestObservability sets the request context before invoking the
   // handler, so the correlation id is always present here. If this function is
   // ever invoked without the wrapper, fail loudly rather than emit a response
-  // with a missing correlation header. (The wrapper passes the request, but this
-  // handler reads everything it needs from the context, so it takes no params.)
+  // with a missing correlation header.
   const correlationId = getCorrelationId();
   if (!correlationId) {
     throw new Error('system-health route invoked outside the request observability context.');
   }
 
-  let outcome: 'success' | 'failure' = 'success';
   try {
     const health = await getSystemHealth({
       appEnv: serverEnv.appEnv,
@@ -51,25 +48,12 @@ async function getSystemHealthRoute(): Promise<NextResponse> {
     });
     return apiResponse(health, { correlationId });
   } catch (error) {
-    outcome = 'failure';
     if (error instanceof ApiError) {
       return apiErrorResponse(error, correlationId);
     }
-    // Generic 500 handling matures with A4 (observability). Re-raise so Next's
+    // Re-raise so the observability wrapper logs a sanitized error and Next's
     // error boundary produces a redacted response rather than leaking detail.
     throw error;
-  } finally {
-    // Best-effort audit of platform-operations access. recordAuditEvent derives
-    // correlation/actor/scope from the request context; a failure here must not
-    // affect the response — but it must NOT be silent either, or a broken audit
-    // pipeline would go unnoticed. Log the failure (correlation id is attached
-    // by the logger) and swallow it.
-    await recordAuditEvent({ action: 'platform.accessed', outcome }).catch((err: unknown) => {
-      logger.error('audit write failed', {
-        action: 'platform.accessed',
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
   }
 }
 

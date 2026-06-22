@@ -55,4 +55,37 @@ describe('recordAuditEvent', () => {
       /request context/i,
     );
   });
+
+  it('redacts token-shaped secrets in reason and before/after before persisting', async () => {
+    const inserted: AuditEvent[] = [];
+    const event = await recordAuditEvent(
+      {
+        action: 'order.approved',
+        outcome: 'success',
+        reason: 'Bearer abc.def.ghi',
+        before: { token: 'secret-value', itemId: 'i1' },
+        after: { state: 'approved' },
+      },
+      {
+        repo: fakeRepo(inserted),
+        context: { correlationId: VALID, actor: { type: 'user', id: 'u1' } },
+      },
+    );
+
+    expect(event.reason).toBe('[REDACTED]');
+    expect(event.before).toEqual({ token: '[REDACTED]', itemId: 'i1' });
+    expect(event.after).toEqual({ state: 'approved' });
+  });
+
+  it('bounds an over-long reason so the immutable trail cannot be flooded', async () => {
+    const inserted: AuditEvent[] = [];
+    const event = await recordAuditEvent(
+      { action: 'x', outcome: 'success', reason: 'a'.repeat(2000) },
+      {
+        repo: fakeRepo(inserted),
+        context: { correlationId: VALID, actor: { type: 'service', id: 's' } },
+      },
+    );
+    expect(event.reason?.length).toBe(500);
+  });
 });
