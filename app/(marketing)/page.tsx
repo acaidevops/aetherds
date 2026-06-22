@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 
 /** Single source of truth for outbound contact targets used across the page. */
-const CONTACT_EMAIL = 'auraconnectai@gmail.com';
+const CONTACT_EMAIL = 'acaidevops@gmail.com';
 const REPO_URL = 'https://github.com/acaidevops/aetherds';
 
 const STEPS = [

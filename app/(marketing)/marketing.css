@@ -3,21 +3,22 @@
  * never leaks tokens into the product surfaces (app/globals.css owns those).
  *
  * Visual language follows PRODUCT.md brand personality: "knowledgeable, calm,
- * attentive... premium and contemporary without becoming theatrical." Warm
- * paper, ink, and a single copper accent. No glow, glass, or novelty motion.
+ * attentive... premium and contemporary without becoming theatrical." Clean
+ * white surfaces, charcoal ink, and a restrained copper accent. No glow,
+ * glass, or novelty motion.
  */
 
 .mkt {
-  --paper: #f7f4ef;
-  --paper-2: #fffdf9;
-  --ink: #1b1813;
-  --ink-soft: #5d554a;
-  --ink-faint: #8a8175;
-  --line: rgba(27, 24, 19, 0.12);
-  --line-soft: rgba(27, 24, 19, 0.07);
-  --accent: #a8512c;
-  --accent-deep: #843e1f;
-  --accent-wash: #f0e6db;
+  --paper: #ffffff;
+  --paper-2: #f6f7f8;
+  --ink: #17191c;
+  --ink-soft: #505760;
+  --ink-faint: #707984;
+  --line: rgba(23, 25, 28, 0.14);
+  --line-soft: rgba(23, 25, 28, 0.08);
+  --accent: #b14f2b;
+  --accent-deep: #87391e;
+  --accent-wash: #f8eee9;
 
   font-family: var(--mkt-font-body), system-ui, sans-serif;
   color: var(--ink);
@@ -69,8 +70,8 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: color-mix(in srgb, var(--paper) 86%, transparent);
-  backdrop-filter: saturate(1.2) blur(8px);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line-soft);
 }
 .mkt-nav__row {
@@ -124,11 +125,11 @@
  * win the cascade and keep labels visible on dark fills. */
 .mkt .mkt-btn--primary {
   background: var(--ink);
-  color: var(--paper-2);
+  color: var(--paper);
 }
 .mkt .mkt-btn--primary:hover {
   background: var(--accent-deep);
-  color: var(--paper-2);
+  color: var(--paper);
 }
 .mkt .mkt-btn--ghost {
   border-color: var(--line);
@@ -161,8 +162,10 @@
 
 /* ---- Hero ---- */
 .mkt-hero {
-  padding: 96px 0 84px;
+  padding: 108px 0 92px;
   border-bottom: 1px solid var(--line-soft);
+  background:
+    radial-gradient(circle at 86% 18%, rgba(177, 79, 43, 0.07), transparent 24rem), var(--paper);
 }
 .mkt-hero__grid {
   display: grid;
@@ -188,9 +191,10 @@
   margin-top: 34px;
 }
 .mkt-hero__aside {
-  border-left: 1px solid var(--line);
-  padding-left: 30px;
-  padding-bottom: 8px;
+  padding: 30px 32px 8px;
+  background: var(--paper-2);
+  border-top: 3px solid var(--accent);
+  border-radius: 12px;
 }
 .mkt-hero__aside dt {
   font-size: 0.74rem;
@@ -209,8 +213,9 @@
 
 /* ---- Clarity band: what AETHER is / is not ---- */
 .mkt-band {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--paper-2);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line-soft);
 }
 .mkt-band__grid {
   display: grid;
@@ -223,7 +228,7 @@
 }
 .mkt-band__cell:first-child {
   padding-right: 48px;
-  border-right: 1px solid rgba(247, 244, 239, 0.16);
+  border-right: 1px solid var(--line);
 }
 .mkt-band__cell:last-child {
   padding-left: 48px;
@@ -235,14 +240,14 @@
   color: var(--accent);
 }
 .mkt-band__cell--muted .mkt-band__tag {
-  color: rgba(247, 244, 239, 0.5);
+  color: var(--ink-faint);
 }
 .mkt-band h2 {
   font-size: 1.7rem;
   margin: 14px 0 10px;
 }
 .mkt-band p {
-  color: rgba(247, 244, 239, 0.72);
+  color: var(--ink-soft);
   max-width: 46ch;
 }
 
@@ -276,7 +281,7 @@
   overflow: hidden;
 }
 .mkt-step {
-  background: var(--paper-2);
+  background: var(--paper);
   padding: 30px 26px 34px;
 }
 .mkt-step__n {
@@ -304,7 +309,7 @@
   display: flex;
   gap: 16px;
   padding: 26px 28px;
-  background: var(--paper-2);
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
@@ -357,7 +362,7 @@
   align-items: center;
   gap: 16px;
   padding: 18px 22px;
-  background: var(--paper-2);
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -388,7 +393,7 @@
 }
 .mkt-stat {
   padding: 28px 26px;
-  background: var(--paper-2);
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
@@ -414,11 +419,11 @@
 .mkt-note {
   margin-top: 28px;
   padding: 18px 22px;
-  border-left: 2px solid var(--accent);
   background: var(--accent-wash);
   font-size: 0.95rem;
   color: var(--ink-soft);
-  border-radius: 0 10px 10px 0;
+  border: 1px solid rgba(177, 79, 43, 0.22);
+  border-radius: 10px;
 }
 
 /* ---- Stack chips ---- */
@@ -433,13 +438,15 @@
   border-radius: 999px;
   font-size: 0.9rem;
   color: var(--ink-soft);
-  background: var(--paper-2);
+  background: var(--paper);
 }
 
 /* ---- CTA ---- */
 .mkt-cta {
   padding: 104px 0;
   text-align: center;
+  background: var(--paper-2);
+  border-top: 1px solid var(--line-soft);
 }
 .mkt-cta h2 {
   font-size: clamp(2.2rem, 5vw, 3.4rem);
@@ -491,10 +498,7 @@
     gap: 40px;
   }
   .mkt-hero__aside {
-    border-left: none;
-    border-top: 1px solid var(--line);
-    padding-left: 0;
-    padding-top: 26px;
+    padding: 26px 28px 6px;
   }
   .mkt-band__grid {
     grid-template-columns: 1fr;
@@ -502,7 +506,7 @@
   .mkt-band__cell:first-child {
     padding: 44px 0;
     border-right: none;
-    border-bottom: 1px solid rgba(247, 244, 239, 0.16);
+    border-bottom: 1px solid var(--line);
   }
   .mkt-band__cell:last-child {
     padding: 44px 0;

@@ -24,10 +24,10 @@ describe('marketing landing page', () => {
   });
 
   it('exposes a single contact email and the repository link', () => {
-    const matches = html.match(/auraconnectai@gmail\.com/g) ?? [];
+    const matches = html.match(/acaidevops@gmail\.com/g) ?? [];
     // mailto in the CTA + mailto and visible text in the footer.
     expect(matches.length).toBeGreaterThanOrEqual(2);
-    expect(html).toContain('mailto:auraconnectai@gmail.com');
+    expect(html).toContain('mailto:acaidevops@gmail.com');
     expect(html).toContain('https://github.com/acaidevops/aetherds');
   });
 
