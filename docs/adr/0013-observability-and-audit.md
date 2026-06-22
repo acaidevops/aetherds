@@ -83,10 +83,10 @@ uses a hand-written policy, like `restaurants`/`locations` do for root tables.
 6. **Append-only audit.** `audit_events` (migration 00000000000003) records actor,
    action, scope, reason, correlation id, outcome, and opaque before/after
    references. Immutability is enforced by a `BEFORE UPDATE OR DELETE` row trigger
-   plus a `BEFORE TRUNCATE` statement trigger (migration 00000000000004 — TRUNCATE
-   does not fire row triggers), both raising `check_violation` and firing for every
-   role including the service role; UPDATE/DELETE privileges are revoked from client
-   roles. RLS: platform_operator reads all; a tenant reads only its own
+   plus a `BEFORE TRUNCATE` statement trigger (both in migration 00000000000003 —
+   TRUNCATE does not fire row triggers), both raising `check_violation` and firing
+   for every role including the service role; UPDATE/DELETE privileges are revoked
+   from client roles. RLS: platform_operator reads all; a tenant reads only its own
    `restaurant_id`; anon reads none.
 7. **Application service derives scope from context.** `recordAuditEvent` takes only
    business fields (action, outcome, reason, references) and derives
