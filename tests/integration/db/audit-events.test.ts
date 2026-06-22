@@ -4,12 +4,13 @@ import { asService, asTenant, committed, createPool, dbReachable } from './helpe
 
 /**
  * Append-only + tenant-isolation test for audit_events (A4, security-privacy.md
- * §7; migration 00000000000003).
+ * §7; migrations 00000000000003 + 00000000000004).
  *
  * Proves:
- *  - Immutability is enforced by the BEFORE UPDATE OR DELETE trigger for EVERY
- *    role, including the service/owner role that bypasses RLS (RLS bypass does
- *    not skip triggers). This is the authoritative append-only guarantee.
+ *  - Immutability is enforced by the BEFORE UPDATE OR DELETE row trigger AND the
+ *    BEFORE TRUNCATE statement trigger, for EVERY role — including the
+ *    service/owner role that bypasses RLS (RLS bypass does not skip triggers).
+ *    This is the authoritative append-only guarantee (TRUNCATE covered by 0004).
  *  - WRITE restriction: clients cannot INSERT audit rows at all (service-role-
  *    only), so the trail is unforgeable.
  *  - READ isolation: a tenant reads only its own restaurant rows;
@@ -87,6 +88,18 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
     await expect(
       asService(pool, async (c) => {
         await c.query('delete from audit_events where id = $1', [AUDIT_A]);
+      }),
+    ).rejects.toThrow(/audit_events is append-only/i);
+  });
+
+  it('rejects TRUNCATE even for the service/owner role (migration 0004 closes the gap)', async () => {
+    // The UPDATE/DELETE row trigger does not fire on TRUNCATE; without the
+    // statement-level guard a privileged role could wipe the trail. asService
+    // runs in a rolled-back transaction, and the trigger raises BEFORE truncate,
+    // so the seeded rows are never lost.
+    await expect(
+      asService(pool, async (c) => {
+        await c.query('truncate table audit_events');
       }),
     ).rejects.toThrow(/audit_events is append-only/i);
   });
