@@ -1,0 +1,103 @@
+import { getRequestContext, redact, type RequestContext } from '@/shared/observability';
+
+import type { AuditEventRepository } from './audit-event-repository';
+import { createAuditEvent, type AuditEvent, type AuditEventOutcome } from '../domain/audit-event';
+
+/**
+ * Application service: record an audit event (ADR 0004, A4).
+ *
+ * Routes call THIS, not the repository directly. The service derives
+ * `correlationId`, tenant scope, and actor from the server {@link RequestContext}
+ * (or an injected one for tests) — never from `input`. This enforces ADR 0010:
+ * nothing client-supplied can fake the scope or correlation of an audit record.
+ *
+ * The caller supplies only the business-meaningful fields: `action`, `outcome`,
+ * `reason`, and opaque before/after references.
+ */
+
+/** Business input only — scope/actor/correlation come from the server context. */
+export interface AuditEventInput {
+  readonly action: string;
+  readonly outcome: AuditEventOutcome;
+  readonly reason?: string | null;
+  readonly before?: AuditEvent['before'];
+  readonly after?: AuditEvent['after'];
+}
+
+/**
+ * Persistence port: see {@link AuditEventRepository} (./audit-event-repository).
+ * The Supabase implementation is injected (tests) or late-bound (runtime) so the
+ * application layer never statically depends on infrastructure.
+ */
+export interface RecordAuditEventDeps {
+  /** Override the repository (tests pass a fake). Defaults to the Supabase impl. */
+  readonly repo?: AuditEventRepository;
+  /** Override the context (tests). Defaults to the active request context. */
+  readonly context?: RequestContext;
+}
+
+// Late-bound default repository factory keeps the application layer free of a
+// static infrastructure import (and of any build-time side effect). Resolved on
+// first use.
+let defaultRepoFactory: () => Promise<AuditEventRepository> = async () => {
+  const { SupabaseAuditEventRepository } =
+    await import('../infrastructure/supabase-audit-repository');
+  return new SupabaseAuditEventRepository();
+};
+
+/** Test-only hook to replace the default repository factory. */
+export function __setDefaultAuditRepoFactoryForTests(
+  factory: () => Promise<AuditEventRepository>,
+): () => void {
+  const original = defaultRepoFactory;
+  defaultRepoFactory = factory;
+  return () => {
+    defaultRepoFactory = original;
+  };
+}
+
+/** Cap on stored reason length — reason is a short operational note, never a
+ * dumping ground for guest text or payloads in the immutable trail. */
+const MAX_REASON_LENGTH = 500;
+
+/** Redact token-shaped secrets from a free-form reason and bound its length. */
+function sanitizeReason(reason?: string | null): string | null {
+  if (!reason) return null;
+  const redacted = redact(reason);
+  return redacted.length > MAX_REASON_LENGTH ? redacted.slice(0, MAX_REASON_LENGTH) : redacted;
+}
+
+export async function recordAuditEvent(
+  input: AuditEventInput,
+  deps: RecordAuditEventDeps = {},
+): Promise<AuditEvent> {
+  const ctx = deps.context ?? getRequestContext();
+  if (!ctx) {
+    // Audit without correlation/actor cannot be trusted; fail loudly rather than
+    // write an unattributable record.
+    throw new Error('recordAuditEvent requires a request context (or injected deps.context).');
+  }
+
+  const event = createAuditEvent({
+    actor: ctx.actor,
+    restaurantId: ctx.restaurantId ?? null,
+    locationId: ctx.locationId ?? null,
+    correlationId: ctx.correlationId,
+    action: input.action,
+    outcome: input.outcome,
+    // reason is free-form operational text, so it gets the same defensive
+    // treatment as before/after: token-shaped secrets are redacted and the
+    // value is length-bounded, since the audit trail is immutable and
+    // security-privacy.md §7 prohibits credentials/PII/guest text being stored.
+    reason: sanitizeReason(input.reason),
+    // before/after are meant to be opaque references, but the audit trail is
+    // immutable and security-privacy.md §7 prohibits credentials/payment/PII in
+    // any persisted record. Redact defensively so a caller that mistakenly
+    // passes a fuller object cannot bake prohibited content into the trail.
+    before: input.before ? redact(input.before) : null,
+    after: input.after ? redact(input.after) : null,
+  });
+
+  const repo = deps.repo ?? (await defaultRepoFactory());
+  return repo.insert(event);
+}

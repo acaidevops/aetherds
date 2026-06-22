@@ -1,11 +1,11 @@
 import 'server-only';
 
-import { type NextResponse, type NextRequest } from 'next/server';
+import { type NextResponse } from 'next/server';
 
 import { getSystemHealth } from '@/modules/platform-operations';
 import { serverEnv } from '@/shared/config';
 import { apiErrorResponse, apiResponse } from '@/shared/http';
-import { CORRELATION_HEADER, resolveCorrelationId } from '@/shared/observability';
+import { getCorrelationId, withRequestObservability } from '@/shared/observability';
 import { ApiError } from '@/shared/validation';
 
 /**
@@ -21,10 +21,25 @@ import { ApiError } from '@/shared/validation';
  * support access (system-architecture.md §3). Authoritative platform routes and
  * auth arrive in later epics; this read-only projection is the A1 seam.
  *
- * Every response carries the x-correlation-id header (api-contracts.md §1).
+ * A4 observability: the handler runs inside {@link withRequestObservability},
+ * which establishes the correlation {@link RequestContext}, wraps the call in a
+ * trace span, records a request-duration histogram, and emits one structured
+ * log — the proof of "metrics/traces for core command path". This is a liveness
+ * probe, so it deliberately does NOT write an audit event: a health check must
+ * stay fast and independent of database latency, and auditing every poll would
+ * flood the immutable trail. The audit service is exercised by its own tests and
+ * by the real audited commands (order approval, membership changes) in their
+ * epics. Every response carries the x-correlation-id header (api-contracts.md §1).
  */
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  const correlationId = resolveCorrelationId(request.headers.get(CORRELATION_HEADER));
+async function getSystemHealthRoute(): Promise<NextResponse> {
+  // withRequestObservability sets the request context before invoking the
+  // handler, so the correlation id is always present here. If this function is
+  // ever invoked without the wrapper, fail loudly rather than emit a response
+  // with a missing correlation header.
+  const correlationId = getCorrelationId();
+  if (!correlationId) {
+    throw new Error('system-health route invoked outside the request observability context.');
+  }
 
   try {
     const health = await getSystemHealth({
@@ -36,8 +51,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (error instanceof ApiError) {
       return apiErrorResponse(error, correlationId);
     }
-    // Generic 500 handling matures with A4 (observability). Re-raise so Next's
+    // Re-raise so the observability wrapper logs a sanitized error and Next's
     // error boundary produces a redacted response rather than leaking detail.
     throw error;
   }
 }
+
+export const GET = withRequestObservability(getSystemHealthRoute);

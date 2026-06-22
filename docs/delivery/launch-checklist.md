@@ -45,6 +45,9 @@ All required boxes must be evidenced, not verbally assumed.
 - [ ] RPO/RTO assessed
 - [ ] Device/location/global pause tested
 - [ ] Alert routing and escalation tested
+- [ ] Telemetry exports to the configured collector (or degrades to console when unset)
+- [ ] `audit_events` migration applied and append-only trigger verified
+- [ ] Audit 1-year retention purge job tracked (ADR 0011; future work)
 
 ## Devices and network
 
