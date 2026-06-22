@@ -37,6 +37,25 @@ const DENY_VALUE: readonly RegExp[] = [
 ];
 
 /**
+ * Secret shapes scrubbed even when EMBEDDED inside a larger string (e.g. a
+ * free-form `reason` or a string nested in before/after). These complement
+ * DENY_VALUE, which only matches whole-string values. Global flag so every
+ * occurrence is replaced. This is best-effort, high-confidence pattern matching
+ * — not a general PII detector; callers must still avoid passing sensitive prose.
+ */
+const EMBEDDED_SECRET: readonly RegExp[] = [
+  /Bearer\s+\S+/gi, // authorization headers
+  /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, // JWT anywhere
+  /\b(?:sk|pk|rk|tok|pm|card)_[A-Za-z0-9]+/g, // provider/Stripe tokens
+  // key=value / key: value secret assignments
+  /\b(?:password|passwd|secret|token|api[_-]?key|authorization|credential)\b\s*[=:]\s*\S+/gi,
+];
+
+function scrubEmbeddedSecrets(value: string): string {
+  return EMBEDDED_SECRET.reduce((acc, re) => acc.replace(re, REDACTED), value);
+}
+
+/**
  * Deep-clone `value`, replacing sensitive keys and values with `'[REDACTED]'`.
  * Never mutates the input. Plain objects/arrays are reconstructed; everything
  * else (primitives, null) is passed through after the value-shape check.
@@ -56,8 +75,9 @@ function walk(value: unknown): unknown {
     }
     return out;
   }
-  if (typeof value === 'string' && DENY_VALUE.some((re) => re.test(value))) {
-    return REDACTED;
+  if (typeof value === 'string') {
+    if (DENY_VALUE.some((re) => re.test(value))) return REDACTED;
+    return scrubEmbeddedSecrets(value);
   }
   return value;
 }

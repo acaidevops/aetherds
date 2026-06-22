@@ -77,6 +77,27 @@ describe('recordAuditEvent', () => {
     expect(event.after).toEqual({ state: 'approved' });
   });
 
+  it('scrubs secrets EMBEDDED mid-string in reason and nested before/after values', async () => {
+    const inserted: AuditEvent[] = [];
+    const event = await recordAuditEvent(
+      {
+        action: 'order.approved',
+        outcome: 'failure',
+        reason: 'retry after auth failure; token=sk_live_abc123 returned 401',
+        before: { note: 'see jwt eyJhbGciOi.JzdWIiOiI.signature for context' },
+      },
+      {
+        repo: fakeRepo(inserted),
+        context: { correlationId: VALID, actor: { type: 'service', id: 's' } },
+      },
+    );
+
+    expect(event.reason).toContain('[REDACTED]');
+    expect(event.reason).not.toContain('sk_live_abc123');
+    expect((event.before as { note: string }).note).toContain('[REDACTED]');
+    expect((event.before as { note: string }).note).not.toContain('eyJhbGciOi');
+  });
+
   it('bounds an over-long reason so the immutable trail cannot be flooded', async () => {
     const inserted: AuditEvent[] = [];
     const event = await recordAuditEvent(

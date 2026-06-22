@@ -75,6 +75,17 @@ describe('redact', () => {
     expect(redact({ b: 'pm_abc123' }).b).toBe('[REDACTED]');
   });
 
+  it('scrubs secrets embedded mid-string, keeping the surrounding text', () => {
+    const out = redact({ note: 'retry; token=sk_live_abc123 then ok' });
+    expect(out.note).toContain('[REDACTED]');
+    expect(out.note).not.toContain('sk_live_abc123');
+    expect(out.note).toContain('retry');
+
+    expect(redact({ m: 'ctx eyJh.bGci.OiJ9 end' }).m).toContain('[REDACTED]');
+    // An ordinary opaque id with no secret shape is left intact.
+    expect(redact({ m: 'order 12345 approved' }).m).toBe('order 12345 approved');
+  });
+
   it('walks nested objects and arrays', () => {
     const out = redact([
       { password: 'p' },

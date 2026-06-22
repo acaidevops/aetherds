@@ -91,7 +91,17 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
     ).rejects.toThrow(/audit_events is append-only/i);
   });
 
-  it('a tenant reads only its own restaurant audit rows', async () => {
+  it('rejects TRUNCATE even for the service/owner role (statement trigger)', async () => {
+    // TRUNCATE is neither UPDATE nor DELETE; without the statement trigger a
+    // privileged process could wipe the whole trail. It must be rejected too.
+    await expect(
+      asService(pool, async (c) => {
+        await c.query('truncate audit_events');
+      }),
+    ).rejects.toThrow(/audit_events is append-only/i);
+  });
+
+  it('a manager reads only its own restaurant audit rows', async () => {
     const ids = await asTenant(
       pool,
       { restaurantId: RESTAURANT_A, appRole: 'manager' },
@@ -104,6 +114,18 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
     expect(ids).not.toContain(AUDIT_B);
   });
 
+  it('a server gets no audit read (oversight is owner/manager only)', async () => {
+    const ids = await asTenant(
+      pool,
+      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'server' },
+      async (c) => {
+        const r = await c.query('select id from audit_events');
+        return (r.rows as { id: string }[]).map((row) => row.id);
+      },
+    );
+    expect(ids).toEqual([]);
+  });
+
   it('platform_operator reads audit rows across tenants', async () => {
     const ids = await asTenant(pool, { appRole: 'platform_operator' }, async (c) => {
       const r = await c.query('select id from audit_events order by id');
@@ -113,13 +135,14 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
     expect(ids).toContain(AUDIT_B);
   });
 
-  it('anonymous reads no audit rows (deny by default)', async () => {
+  it('anon cannot even read the table (no SELECT grant — not just empty via RLS)', async () => {
     const client = await pool.connect();
     try {
       await client.query('begin');
       await client.query('set local role anon');
-      const r = await client.query('select id from audit_events');
-      expect(r.rows).toHaveLength(0);
+      await expect(client.query('select id from audit_events')).rejects.toThrow(
+        /permission denied/i,
+      );
       await client.query('rollback');
     } finally {
       client.release();

@@ -12,13 +12,15 @@
 --      (recordAuditEvent), so a client can never forge an audit record (wrong
 --      actor, fabricated outcome, etc.). The service role bypasses RLS but is
 --      still bound by the immutability trigger below.
---   2. A BEFORE UPDATE OR DELETE trigger that raises for EVERY role — including
---      the service role and table owner, which bypass RLS. RLS bypass does not
---      skip triggers, so this is the authoritative immutability guarantee.
+--   2. BEFORE UPDATE OR DELETE (row) and BEFORE TRUNCATE (statement) triggers
+--      that raise for EVERY role — including the service role and table owner,
+--      which bypass RLS. RLS bypass does not skip triggers, so these are the
+--      authoritative immutability guarantee (UPDATE/DELETE/TRUNCATE all blocked).
 --
 -- The read model is asymmetric (security-privacy.md §7): platform_operator reads
--- all audit rows; a tenant member reads only its own restaurant's rows; anon
--- reads none. This is intentionally a hand-written policy, NOT the generic
+-- all audit rows; an owner/manager reads only its own restaurant's rows (audit
+-- is a restaurant-wide oversight tool); servers/food-safety and anon read none.
+-- This is intentionally a hand-written policy, NOT the generic
 -- app.enable_tenant_rls helper: that helper emits UPDATE/DELETE policies audit
 -- must not have, assumes a location_id FK relationship audit does not require,
 -- and cannot express the "tenant reads own / platform reads all / no tenant
@@ -72,31 +74,51 @@ create trigger trg_audit_events_immutable
   before update or delete on audit_events
   for each row execute function app.audit_events_immutable();
 
+-- TRUNCATE is neither UPDATE nor DELETE and does NOT fire row-level triggers, so
+-- without this a privileged/service-role process could wipe the entire trail
+-- while UPDATE/DELETE stay blocked. TRUNCATE triggers must be FOR EACH STATEMENT;
+-- the same function raises (tg_op = 'TRUNCATE'), closing the immutability hole.
+create trigger trg_audit_events_immutable_truncate
+  before truncate on audit_events
+  for each statement execute function app.audit_events_immutable();
+
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (ADR 0010 / 0012).
--- READ: platform_operator sees all; a tenant member sees only its own
---       restaurant_id. No select policy matches anon -> deny by default.
+-- READ is an OVERSIGHT capability, restaurant-wide and role-restricted:
+--   * platform_operator sees all rows (audited support);
+--   * owner/manager see their own restaurant's rows — INTENTIONALLY at the
+--     restaurant level, not sub-scoped by location: oversight spans the whole
+--     restaurant and many audit rows are restaurant-level (location_id IS NULL),
+--     which a location predicate would hide. Servers/food-safety roles get no
+--     audit read (they have no oversight need), so a server cannot browse the
+--     trail of other staff/locations.
+--   * anon (unauthenticated) gets no read at all — no SELECT grant below.
 -- WRITE: NO insert/update/delete policy. Clients cannot write audit rows at all
 --        — the audit trail must be unforgeable, so the only writer is the
 --        service-role server command (which bypasses RLS). The immutability
---        trigger then prevents even that writer from mutating existing rows.
+--        triggers then prevent even that writer from mutating or truncating rows.
 -- ---------------------------------------------------------------------------
-create policy audit_events_tenant_read on audit_events
+create policy audit_events_oversight_read on audit_events
   for select
   using (
-        restaurant_id = app.current_restaurant_id()
-    or  app.current_role() = 'platform_operator'
+        app.current_role() = 'platform_operator'
+    or  (
+          restaurant_id = app.current_restaurant_id()
+      and app.current_role() in ('owner', 'manager')
+    )
   );
 
 -- ---------------------------------------------------------------------------
 -- Privileges.
--- Client-reachable roles may SELECT only. INSERT is deliberately NOT granted:
--- audit writes are service-role-only so a tenant member cannot forge records.
--- UPDATE/DELETE are withheld too, and the immutability trigger blocks them for
--- every role including the service role / table owner.
+-- Only `authenticated` gets SELECT (RLS then restricts to oversight roles);
+-- `anon` is granted nothing so an unauthenticated client cannot even probe the
+-- table. INSERT is deliberately NOT granted: audit writes are service-role-only
+-- so a tenant member cannot forge records. UPDATE/DELETE/TRUNCATE are withheld
+-- too, and the immutability triggers block them for every role including the
+-- service role / table owner.
 -- ---------------------------------------------------------------------------
-grant usage on schema app to authenticated, anon;
-grant select on audit_events to authenticated, anon;
+grant usage on schema app to authenticated;
+grant select on audit_events to authenticated;
 
 -- Retention (security-privacy.md §12: 1 year for security/privilege/menu-safety/
 -- order-change audit) is enforced by a future scheduled purge job per ADR 0011.
