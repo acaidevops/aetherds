@@ -17,6 +17,7 @@ export type PrivilegedCommand =
   | 'membership.change_role'
   | 'device.provision'
   | 'device.revoke'
+  | 'device.reassign'
   | 'session.transfer';
 
 const PRIVILEGED_COMMANDS: ReadonlySet<PrivilegedCommand> = new Set([
@@ -26,6 +27,9 @@ const PRIVILEGED_COMMANDS: ReadonlySet<PrivilegedCommand> = new Set([
   'membership.change_role',
   'device.provision',
   'device.revoke',
+  // Reassignment invalidates the prior device capability, so it is step-up
+  // protected like provisioning/revocation (B2).
+  'device.reassign',
   'session.transfer',
 ]);
 
