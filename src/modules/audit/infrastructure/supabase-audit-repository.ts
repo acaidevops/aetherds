@@ -11,7 +11,7 @@ import type { AuditEventRepository } from '../application/audit-event-repository
  * Writes to the append-only `audit_events` table using the server service-role
  * client (ADR 0010/0011). RLS is bypassed by the service identity, so
  * append-only enforcement rests on the table's `BEFORE UPDATE OR DELETE` trigger
- * (migration 00000000000002) — not on RLS. The error message carries the action
+ * (migration 00000000000003) — not on RLS. The error message carries the action
  * code only, never a payload, so a failed insert never leaks audited content.
  */
 

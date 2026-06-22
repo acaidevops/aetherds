@@ -4,12 +4,14 @@ import { asService, asTenant, committed, createPool, dbReachable } from './helpe
 
 /**
  * Append-only + tenant-isolation test for audit_events (A4, security-privacy.md
- * §7; migration 00000000000002).
+ * §7; migration 00000000000003).
  *
  * Proves:
  *  - Immutability is enforced by the BEFORE UPDATE OR DELETE trigger for EVERY
  *    role, including the service/owner role that bypasses RLS (RLS bypass does
  *    not skip triggers). This is the authoritative append-only guarantee.
+ *  - WRITE restriction: clients cannot INSERT audit rows at all (service-role-
+ *    only), so the trail is unforgeable.
  *  - READ isolation: a tenant reads only its own restaurant rows;
  *    platform_operator reads all; anon reads none.
  *  - WITH CHECK: a tenant cannot INSERT a row in another tenant's scope.
@@ -124,7 +126,9 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
     }
   });
 
-  it('rejects a cross-tenant INSERT via WITH CHECK', async () => {
+  it('rejects ANY client INSERT — audit is write-restricted to the service role', async () => {
+    // Even an own-scope insert by a tenant is denied: clients have no INSERT
+    // privilege, so they cannot forge audit records (wrong actor, fake outcome).
     await expect(
       asTenant(
         pool,
@@ -132,27 +136,11 @@ describeOrSkip('audit_events append-only + RLS (A4)', () => {
         async (c) => {
           await c.query(
             `insert into audit_events (restaurant_id, actor_type, actor_id, action, correlation_id, outcome)
-             values ($1, 'user', 'u', 'sneaky', 'corr_x', 'success')`,
-            [RESTAURANT_B],
+             values ($1, 'user', 'u', 'forged', 'corr_x', 'success')`,
+            [RESTAURANT_A],
           );
         },
       ),
-    ).rejects.toThrow(/row-level security/i);
-  });
-
-  it('allows an own-scope INSERT by a tenant (rolled back by the harness)', async () => {
-    const returned = await asTenant(
-      pool,
-      { restaurantId: RESTAURANT_A, locationId: LOCATION_A1, appRole: 'manager' },
-      async (c) => {
-        const r = await c.query(
-          `insert into audit_events (restaurant_id, actor_type, actor_id, action, correlation_id, outcome)
-           values ($1, 'user', 'u', 'own.action', 'corr_y', 'success') returning id`,
-          [RESTAURANT_A],
-        );
-        return r.rows.length;
-      },
-    );
-    expect(returned).toBe(1);
+    ).rejects.toThrow(/permission denied|row-level security/i);
   });
 });

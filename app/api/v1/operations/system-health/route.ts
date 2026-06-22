@@ -6,7 +6,7 @@ import { recordAuditEvent } from '@/modules/audit';
 import { getSystemHealth } from '@/modules/platform-operations';
 import { serverEnv } from '@/shared/config';
 import { apiErrorResponse, apiResponse } from '@/shared/http';
-import { getCorrelationId, withRequestObservability } from '@/shared/observability';
+import { getCorrelationId, logger, withRequestObservability } from '@/shared/observability';
 import { ApiError } from '@/shared/validation';
 
 /**
@@ -61,8 +61,15 @@ async function getSystemHealthRoute(): Promise<NextResponse> {
   } finally {
     // Best-effort audit of platform-operations access. recordAuditEvent derives
     // correlation/actor/scope from the request context; a failure here must not
-    // affect the response.
-    await recordAuditEvent({ action: 'platform.accessed', outcome }).catch(() => undefined);
+    // affect the response — but it must NOT be silent either, or a broken audit
+    // pipeline would go unnoticed. Log the failure (correlation id is attached
+    // by the logger) and swallow it.
+    await recordAuditEvent({ action: 'platform.accessed', outcome }).catch((err: unknown) => {
+      logger.error('audit write failed', {
+        action: 'platform.accessed',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 }
 

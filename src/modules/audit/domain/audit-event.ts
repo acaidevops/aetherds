@@ -8,7 +8,7 @@ import type { RequestActor } from '@/shared/observability';
  * "Audit logs are append-only and include actor, action, timestamp, scope,
  * reason, correlation ID, and before/after references." This value object
  * captures exactly those fields. It is a business fact, not a free-form log
- * line: persistence is immutable (see migration 00000000000002), and `before`/
+ * line: persistence is immutable (see migration 00000000000003), and `before`/
  * `after` are opaque REFERENCES (ids, state pointers, version numbers) — never
  * full payloads, so prohibited content cannot leak through the audit trail.
  */

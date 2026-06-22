@@ -149,7 +149,7 @@ dining session → order batch → approval group → outbox job
 ```
 
 Audit: privileged and state-changing operations append to `audit_events`
-(migration 00000000000002) — actor, action, scope, reason, correlation id,
+(migration 00000000000003) — actor, action, scope, reason, correlation id,
 outcome, and opaque before/after references. The table is append-only by trigger
 (fires even for the service role) and tenant-isolated: a platform operator reads
 all rows, a tenant reads only its own `restaurant_id`, anon reads none. The

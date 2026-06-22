@@ -6,8 +6,12 @@
 -- via the service-role client, deriving scope/actor/correlation from the server
 -- request context (never client input — ADR 0010).
 --
--- Append-only is enforced by TWO independent layers:
---   1. Privilege: authenticated/anon get only SELECT, INSERT (no UPDATE/DELETE).
+-- Append-only AND write-restricted:
+--   1. Privilege: authenticated/anon get only SELECT — NO INSERT/UPDATE/DELETE.
+--      Audit rows are written exclusively by the service-role server command
+--      (recordAuditEvent), so a client can never forge an audit record (wrong
+--      actor, fabricated outcome, etc.). The service role bypasses RLS but is
+--      still bound by the immutability trigger below.
 --   2. A BEFORE UPDATE OR DELETE trigger that raises for EVERY role — including
 --      the service role and table owner, which bypass RLS. RLS bypass does not
 --      skip triggers, so this is the authoritative immutability guarantee.
@@ -72,11 +76,10 @@ create trigger trg_audit_events_immutable
 -- Row-Level Security (ADR 0010 / 0012).
 -- READ: platform_operator sees all; a tenant member sees only its own
 --       restaurant_id. No select policy matches anon -> deny by default.
--- INSERT: constrain tenant scope on insert (defense-in-depth; writes normally
---         arrive via the service role, which bypasses RLS). Platform-wide rows
---         (null restaurant_id) are insertable only by platform_operator.
--- UPDATE/DELETE: no policy -> RLS denies for tenant roles; the trigger above
---                denies for everyone.
+-- WRITE: NO insert/update/delete policy. Clients cannot write audit rows at all
+--        — the audit trail must be unforgeable, so the only writer is the
+--        service-role server command (which bypasses RLS). The immutability
+--        trigger then prevents even that writer from mutating existing rows.
 -- ---------------------------------------------------------------------------
 create policy audit_events_tenant_read on audit_events
   for select
@@ -85,22 +88,15 @@ create policy audit_events_tenant_read on audit_events
     or  app.current_role() = 'platform_operator'
   );
 
-create policy audit_events_tenant_insert on audit_events
-  for insert
-  with check (
-        (restaurant_id = app.current_restaurant_id())
-    or  app.current_role() = 'platform_operator'
-  );
-
 -- ---------------------------------------------------------------------------
 -- Privileges.
--- Client-reachable roles may INSERT and SELECT only; UPDATE/DELETE are withheld
--- so append-only holds at the privilege layer too. The service role (table owner
--- in CI, service-role identity in Supabase) writes through RLS bypass and is
--- still bound by the immutability trigger.
+-- Client-reachable roles may SELECT only. INSERT is deliberately NOT granted:
+-- audit writes are service-role-only so a tenant member cannot forge records.
+-- UPDATE/DELETE are withheld too, and the immutability trigger blocks them for
+-- every role including the service role / table owner.
 -- ---------------------------------------------------------------------------
 grant usage on schema app to authenticated, anon;
-grant select, insert on audit_events to authenticated, anon;
+grant select on audit_events to authenticated, anon;
 
 -- Retention (security-privacy.md §12: 1 year for security/privilege/menu-safety/
 -- order-change audit) is enforced by a future scheduled purge job per ADR 0011.

@@ -1,4 +1,4 @@
-import { getRequestContext, type RequestContext } from '@/shared/observability';
+import { getRequestContext, redact, type RequestContext } from '@/shared/observability';
 
 import type { AuditEventRepository } from './audit-event-repository';
 import { createAuditEvent, type AuditEvent, type AuditEventOutcome } from '../domain/audit-event';
@@ -75,8 +75,12 @@ export async function recordAuditEvent(
     action: input.action,
     outcome: input.outcome,
     reason: input.reason ?? null,
-    before: input.before ?? null,
-    after: input.after ?? null,
+    // before/after are meant to be opaque references, but the audit trail is
+    // immutable and security-privacy.md §7 prohibits credentials/payment/PII in
+    // any persisted record. Redact defensively so a caller that mistakenly
+    // passes a fuller object cannot bake prohibited content into the trail.
+    before: input.before ? redact(input.before) : null,
+    after: input.after ? redact(input.after) : null,
   });
 
   const repo = deps.repo ?? (await defaultRepoFactory());

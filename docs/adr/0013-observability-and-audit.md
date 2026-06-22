@@ -80,7 +80,7 @@ uses a hand-written policy, like `restaurants`/`locations` do for root tables.
 5. **Redacting child logger.** The existing `log()` sink is wrapped by `createLogger`,
    which auto-attaches correlation/scope from the context and runs every entry
    through `redact()` (§7 prohibited fields), preserving allowed opaque ids.
-6. **Append-only audit.** `audit_events` (migration 00000000000002) records actor,
+6. **Append-only audit.** `audit_events` (migration 00000000000003) records actor,
    action, scope, reason, correlation id, outcome, and opaque before/after
    references. Immutability is enforced by a `BEFORE UPDATE OR DELETE` trigger
    (`check_violation`) that fires for every role including the service role, plus
