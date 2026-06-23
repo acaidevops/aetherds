@@ -144,15 +144,19 @@ Acceptance:
 - Refresh/revocation behavior
 - Health alerts
 
-### D3 — Menu import and normalization (P0)
+### D3 — Menu import and normalization (P0) ✅
+
+**Status**: Complete (Issue #24)
 
 Acceptance:
 
-- Categories/items/modifiers/prices/availability normalized
-- Raw provider snapshot protected
-- Stable mapping records
-- New items unpublished
-- Broken mappings flagged, never guessed
+- ✅ Categories/items/modifiers/prices/availability normalized
+- ✅ Raw provider snapshot protected (immutable snapshots table)
+- ✅ Stable mapping records (menu_mappings table)
+- ✅ New items unpublished (default is_published=false)
+- ✅ Broken mappings flagged, never guessed (per ADR-0006)
+
+**Implementation**: Database schema (3 tables + RLS), domain models, repositories, importMenu() service. 32 tests passing (13 unit, 11 contract, 8 integration).
 
 ### D4 — Webhook, polling, and reconciliation (P0)
 
