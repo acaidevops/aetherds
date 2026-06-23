@@ -15,21 +15,54 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { Pool } from 'pg';
 
-import { importMenu } from '@/modules/menu/application/import-menu';
-import { SupabaseMenuSnapshotRepository } from '@/modules/menu/infrastructure/supabase-menu-snapshot-repository';
-import { SupabaseMenuMappingRepository } from '@/modules/menu/infrastructure/supabase-menu-mapping-repository';
-import { SupabaseSyncCursorRepository } from '@/modules/menu/infrastructure/supabase-sync-cursor-repository';
-import { createMockPosProvider } from '@/modules/spoton/infrastructure/mock-pos-provider';
-import { buildMockMenu, MOCK_MENU_VERSION } from '@/modules/spoton/infrastructure/mock-menu-seed';
-import type { Principal } from '@/shared/auth/principal';
-import { createClient } from '@supabase/supabase-js';
-
 import { createPool, dbReachable, asTenant, asService, committed, type TenantClaims } from './helpers';
 
 // Skip all tests if database is not reachable
-const testIf = dbReachable ? it : it.skip;
+const describeOrSkip = dbReachable ? describe : describe.skip;
 
-describe('Menu Import Integration', () => {
+if (!dbReachable) {
+  console.warn(
+    '[menu-import] SUPABASE_DB_URL unset — skipping integration suite (unit runs unaffected).',
+  );
+}
+
+// Conditionally import modules that require environment variables
+// This prevents environment validation errors when SUPABASE_DB_URL is not set
+let importMenu: any;
+let SupabaseMenuSnapshotRepository: any;
+let SupabaseMenuMappingRepository: any;
+let SupabaseSyncCursorRepository: any;
+let createMockPosProvider: any;
+let buildMockMenu: any;
+let MOCK_MENU_VERSION: any;
+let createClient: any;
+type Principal = any;
+
+if (dbReachable) {
+  const menuImport = await import('@/modules/menu/application/import-menu');
+  importMenu = menuImport.importMenu;
+  
+  const snapshotRepo = await import('@/modules/menu/infrastructure/supabase-menu-snapshot-repository');
+  SupabaseMenuSnapshotRepository = snapshotRepo.SupabaseMenuSnapshotRepository;
+  
+  const mappingRepo = await import('@/modules/menu/infrastructure/supabase-menu-mapping-repository');
+  SupabaseMenuMappingRepository = mappingRepo.SupabaseMenuMappingRepository;
+  
+  const cursorRepo = await import('@/modules/menu/infrastructure/supabase-sync-cursor-repository');
+  SupabaseSyncCursorRepository = cursorRepo.SupabaseSyncCursorRepository;
+  
+  const mockProvider = await import('@/modules/spoton/infrastructure/mock-pos-provider');
+  createMockPosProvider = mockProvider.createMockPosProvider;
+  
+  const mockMenu = await import('@/modules/spoton/infrastructure/mock-menu-seed');
+  buildMockMenu = mockMenu.buildMockMenu;
+  MOCK_MENU_VERSION = mockMenu.MOCK_MENU_VERSION;
+  
+  const supabase = await import('@supabase/supabase-js');
+  createClient = supabase.createClient;
+}
+
+describeOrSkip('Menu Import Integration', () => {
   let pool: Pool;
   let restaurantId: string;
   let locationId: string;
@@ -94,7 +127,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('performs end-to-end menu import with mock provider', async () => {
+  it('performs end-to-end menu import with mock provider', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -130,7 +163,7 @@ describe('Menu Import Integration', () => {
     expect(result.stats.modifiersProcessed).toBeGreaterThan(0);
   });
 
-  testIf('saves snapshot correctly in database', async () => {
+  it('saves snapshot correctly in database', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -174,7 +207,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('creates mappings with correct structure', async () => {
+  it('creates mappings with correct structure', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -230,7 +263,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('updates sync cursor correctly', async () => {
+  it('updates sync cursor correctly', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -273,7 +306,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('enforces RLS policies for tenant isolation', async () => {
+  it('enforces RLS policies for tenant isolation', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -331,7 +364,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('detects broken mappings on re-import with changed menu', async () => {
+  it('detects broken mappings on re-import with changed menu', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -365,7 +398,7 @@ describe('Menu Import Integration', () => {
     const modifiedMenu = {
       ...originalMenu,
       menuVersion: 'v2',
-      items: originalMenu.items.filter(item => item.itemId !== 'item_calamari'),
+      items: originalMenu.items.filter((item: any) => item.itemId !== 'item_calamari'),
     };
 
     // Create a new provider with the modified menu
@@ -404,7 +437,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('records audit events', async () => {
+  it('records audit events', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
@@ -445,7 +478,7 @@ describe('Menu Import Integration', () => {
     });
   });
 
-  testIf('performs idempotent imports (running twice produces same result)', async () => {
+  it('performs idempotent imports (running twice produces same result)', async () => {
     const provider = createMockPosProvider();
     const snapshotRepo = new SupabaseMenuSnapshotRepository(supabaseClient);
     const mappingRepo = new SupabaseMenuMappingRepository(supabaseClient);
